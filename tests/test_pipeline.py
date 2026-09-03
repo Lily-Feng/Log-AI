@@ -8,7 +8,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "payment-service.log"
 
 
 def build():
-    return Tier1Pipeline(PipelineConfig(app_packages=("com.visa.",), default_service="payment-svc"))
+    return Tier1Pipeline(PipelineConfig(app_packages=("com.lily.",), default_service="lily-payments"))
 
 
 def analyse():

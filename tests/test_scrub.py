@@ -69,3 +69,13 @@ def test_totals_accumulate_and_track_flag_prevents_double_counting():
     s.scrub("card 4111111111111111")
     s.scrub("card 4111111111111111", track=False)
     assert s.totals["pan"] == 1
+
+
+def test_over_redaction_is_the_intended_failure_direction():
+    # Real Hadoop logs contain `Token: Token { kind: ContainerToken ... }`. The
+    # word after `Token:` is a type name, not a credential, and it is redacted
+    # anyway. That is deliberate: under-redacting a real secret is far worse
+    # than redacting a harmless word, so the rule is not loosened to fix this.
+    r = Scrubber().scrub("Token: Token { kind: ContainerToken }")
+    assert r.text.startswith("Token: [REDACTED]")
+    assert r.hits["secret_kv"] == 1

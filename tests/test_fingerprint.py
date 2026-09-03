@@ -1,13 +1,13 @@
 from javalogai.ingest.exceptions import parse_exception_chain
 from javalogai.template.fingerprint import DEFAULT_TOP_N, describe_fingerprint, fingerprint_exception
 
-APP = ("com.visa.",)
+APP = ("com.lily.",)
 HEAD = ["java.lang.NullPointerException: acct is null",
-        "\tat com.visa.payments.PaymentService.authorize(PaymentService.java:142)"]
+        "\tat com.lily.payments.PaymentService.authorize(PaymentService.java:142)"]
 PATHS = {
-    "rest": "\tat com.visa.payments.api.PaymentController.submit(PaymentController.java:57)",
-    "kafka": "\tat com.visa.payments.stream.SettlementConsumer.onMessage(SettlementConsumer.java:31)",
-    "batch": "\tat com.visa.payments.batch.NightlyReconJob.run(NightlyReconJob.java:214)",
+    "rest": "\tat com.lily.payments.api.PaymentController.submit(PaymentController.java:57)",
+    "kafka": "\tat com.lily.payments.stream.SettlementConsumer.onMessage(SettlementConsumer.java:31)",
+    "batch": "\tat com.lily.payments.batch.NightlyReconJob.run(NightlyReconJob.java:214)",
 }
 
 
@@ -30,19 +30,19 @@ def test_path_sensitive_grouping_available_when_wanted():
 
 
 def test_different_defects_do_not_collide():
-    other = ["java.lang.NullPointerException: cfg is null", "\tat com.visa.billing.Invoice.render(Invoice.java:20)"]
+    other = ["java.lang.NullPointerException: cfg is null", "\tat com.lily.billing.Invoice.render(Invoice.java:20)"]
     assert fp(HEAD + [PATHS["rest"]]) != fp(other)
 
 
 def test_different_root_cause_changes_the_fingerprint():
-    a = HEAD + ["Caused by: java.sql.SQLException: timeout", "\tat com.visa.db.R.q(R.java:3)"]
-    b = HEAD + ["Caused by: java.io.IOException: refused", "\tat com.visa.db.R.q(R.java:3)"]
+    a = HEAD + ["Caused by: java.sql.SQLException: timeout", "\tat com.lily.db.R.q(R.java:3)"]
+    b = HEAD + ["Caused by: java.io.IOException: refused", "\tat com.lily.db.R.q(R.java:3)"]
     assert fp(a) != fp(b)
 
 
 def test_line_numbers_excluded_by_default_survive_refactoring():
     moved = ["java.lang.NullPointerException: acct is null",
-             "\tat com.visa.payments.PaymentService.authorize(PaymentService.java:988)"]
+             "\tat com.lily.payments.PaymentService.authorize(PaymentService.java:988)"]
     assert fp(HEAD) == fp(moved)
     assert fp(HEAD, include_lines=True) != fp(moved, include_lines=True)
 

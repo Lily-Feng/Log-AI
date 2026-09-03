@@ -35,11 +35,30 @@ SPRING_BOOT = re.compile(
 
 #: Logback/Log4j2 common: `ts LEVEL [thread] logger - msg`
 LOGBACK = re.compile(
-    rf"^{_TS}\s+{_LEVEL}\s+\[\s*(?P<thread>[^\]]*?)\s*\]\s+{_LOGGER}\s+[-:]\s+(?P<msg>.*)$"
+    rf"^{_TS}\s+{_LEVEL}\s+\[\s*(?P<thread>[^\]]*?)\s*\]\s+{_LOGGER}\s*[-:]\s+(?P<msg>.*)$"
 )
 
 #: Same, without a thread field.
-LOGBACK_NO_THREAD = re.compile(rf"^{_TS}\s+{_LEVEL}\s+{_LOGGER}\s+[-:]\s+(?P<msg>.*)$")
+LOGBACK_NO_THREAD = re.compile(rf"^{_TS}\s+{_LEVEL}\s+{_LOGGER}\s*[-:]\s+(?P<msg>.*)$")
+
+#: ZooKeeper: `ts - LEVEL [thread:Logger@line] - msg`. The logger is buried in
+#: the thread bracket, which itself contains nested brackets
+#: (`QuorumPeer[myid=1]/...`), so the thread group is greedy up to the last `] -`.
+ZOOKEEPER = re.compile(
+    rf"^{_TS}\s+-\s+{_LEVEL}\s+\[(?P<thread>.+)\]\s+-\s+(?P<msg>.*)$"
+)
+
+#: Spark / YARN: two-digit year, no thread field.
+SPARK = re.compile(
+    r"^(?P<ts>\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})\s+"
+    rf"{_LEVEL}\s+{_LOGGER}\s*:\s+(?P<msg>.*)$"
+)
+
+#: Legacy HDFS/Hadoop: `yymmdd HHMMSS pid LEVEL logger: msg`.
+HDFS_LEGACY = re.compile(
+    r"^(?P<ts>\d{6}\s+\d{6})\s+(?P<pid>\d+)\s+"
+    rf"{_LEVEL}\s+{_LOGGER}\s*:\s+(?P<msg>.*)$"
+)
 
 #: Last resort: a timestamp and a level, everything after is the message.
 GENERIC = re.compile(rf"^{_TS}\s+\[?{_LEVEL}\]?\s+(?P<msg>.*)$")
@@ -49,6 +68,9 @@ DEFAULT_PATTERNS: tuple[re.Pattern[str], ...] = (
     SPRING_BOOT,
     LOGBACK,
     LOGBACK_NO_THREAD,
+    ZOOKEEPER,
+    SPARK,
+    HDFS_LEGACY,
     GENERIC,
 )
 
@@ -59,6 +81,8 @@ _TS_FORMATS = (
     "%Y-%m-%dT%H:%M:%S.%f",
     "%Y-%m-%dT%H:%M:%S,%f",
     "%Y-%m-%dT%H:%M:%S",
+    "%y/%m/%d %H:%M:%S",
+    "%y%m%d %H%M%S",
 )
 
 
@@ -77,6 +101,19 @@ def parse_timestamp(text: str | None) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+_ZK_LOGGER = re.compile(r"(?P<logger>[\w$.]+)@\d+$")
+
+
+def _split_zookeeper_thread(thread: str | None) -> tuple[str | None, str | None]:
+    """ZooKeeper packs `thread:Logger@line` into one bracket; split them apart."""
+    if not thread:
+        return None, None
+    if m := _ZK_LOGGER.search(thread):
+        logger = m.group("logger").rsplit(":", 1)[-1]
+        return thread[: m.start()].rstrip(":") or None, logger
+    return thread, None
 
 
 class Header(NamedTuple):
@@ -103,6 +140,8 @@ class HeaderParser:
             if not m:
                 continue
             g = m.groupdict()
+            if pattern is ZOOKEEPER:
+                g["thread"], g["logger"] = _split_zookeeper_thread(g.get("thread"))
             return Header(
                 timestamp=parse_timestamp(g.get("ts")),
                 severity=Severity.parse(g.get("level")),

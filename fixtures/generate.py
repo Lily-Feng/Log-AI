@@ -24,7 +24,7 @@ SEED = 20240115
 START = datetime(2024, 1, 15, 10, 0, 0)
 OUT = Path(__file__).parent / "payment-service.log"
 
-SVC = "payment-svc"
+SVC = "lily-payments"
 THREADS = ["http-nio-8080-exec-1", "http-nio-8080-exec-3", "http-nio-8080-exec-7", "scheduling-1"]
 
 
@@ -38,21 +38,21 @@ def line(ts: datetime, level: str, logger: str, msg: str, thread: str | None = N
 
 
 NPE_HEAD = [
-    'java.lang.NullPointerException: Cannot invoke "com.visa.payments.model.Account.getBalance()" because "acct" is null',
-    "\tat com.visa.payments.PaymentService.authorize(PaymentService.java:142)",
+    'java.lang.NullPointerException: Cannot invoke "com.lily.payments.model.Account.getBalance()" because "acct" is null',
+    "\tat com.lily.payments.PaymentService.authorize(PaymentService.java:142)",
 ]
 NPE_TAIL = [
     "\tat org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119)",
     "\t... 47 common frames omitted",
     "Caused by: java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30000ms",
     "\tat com.zaxxer.hikari.pool.HikariPool.createTimeoutException(HikariPool.java:696)",
-    "\tat com.visa.payments.db.AccountRepository.findByToken(AccountRepository.java:88)",
+    "\tat com.lily.payments.db.AccountRepository.findByToken(AccountRepository.java:88)",
     "\t... 3 more",
 ]
 ENTRY_PATHS = {
-    "rest": "\tat com.visa.payments.api.PaymentController.submit(PaymentController.java:57)",
-    "kafka": "\tat com.visa.payments.stream.SettlementConsumer.onMessage(SettlementConsumer.java:31)",
-    "batch": "\tat com.visa.payments.batch.NightlyReconJob.run(NightlyReconJob.java:214)",
+    "rest": "\tat com.lily.payments.api.PaymentController.submit(PaymentController.java:57)",
+    "kafka": "\tat com.lily.payments.stream.SettlementConsumer.onMessage(SettlementConsumer.java:31)",
+    "batch": "\tat com.lily.payments.batch.NightlyReconJob.run(NightlyReconJob.java:214)",
 }
 
 
@@ -70,7 +70,7 @@ def build() -> list[str]:
         # steady successful traffic
         for i in range(random.randint(25, 35)):
             t = ts + timedelta(seconds=i * 1.7)
-            out.append(line(t, "INFO", "c.v.p.PaymentService",
+            out.append(line(t, "INFO", "c.l.p.PaymentService",
                             f"Processed payment {random.randint(10000, 99999)} for account "
                             f"A-{random.randint(100, 999)} in {random.randint(8, 90)} ms",
                             random.choice(THREADS)))
@@ -79,14 +79,14 @@ def build() -> list[str]:
         declines = 5 if minute < 26 else 200
         for i in range(declines):
             t = ts + timedelta(seconds=(i * 0.29) % 59)
-            out.append(line(t, "WARN", "c.v.p.IssuerClient",
+            out.append(line(t, "WARN", "c.l.p.IssuerClient",
                             f"Payment declined by issuer code={random.choice(['51', '05', '61'])} "
                             f"attempt={random.randint(1, 3)}", random.choice(THREADS)))
 
         # cardholder data leaking into a log message
         if minute == 6:
             t = ts + timedelta(seconds=12)
-            out.append(line(t, "ERROR", "c.v.p.PaymentService",
+            out.append(line(t, "ERROR", "c.l.p.PaymentService",
                             "Validation failed for card 4111 1111 1111 1111 holder jane.doe@example.com "
                             "cvv=451 orderId=4029183746152839"))
 
@@ -94,7 +94,7 @@ def build() -> list[str]:
         for at_minute, entry in ((8, "rest"), (14, "kafka"), (20, "batch")):
             if minute == at_minute:
                 t = ts + timedelta(seconds=33)
-                out.append(line(t, "ERROR", "c.v.p.PaymentService",
+                out.append(line(t, "ERROR", "c.l.p.PaymentService",
                                 f"Authorization failed for token tok_{random.randint(1000, 9999)}",
                                 random.choice(THREADS)))
                 out.extend(npe_trace(entry))
@@ -102,7 +102,7 @@ def build() -> list[str]:
         # something genuinely new, late
         if minute == 28:
             t = ts + timedelta(seconds=5)
-            out.append(line(t, "ERROR", "c.v.p.CircuitBreaker",
+            out.append(line(t, "ERROR", "c.l.p.CircuitBreaker",
                             "Circuit breaker OPENED for downstream issuer-gateway after 20 consecutive failures"))
 
     return out

@@ -14,7 +14,11 @@ from typing import Iterable, Sequence
 
 from .baseline.detector import DetectorConfig
 from .pipeline import PipelineConfig, Tier1Pipeline
+from .react.actions import RiskLevel
+from .react.engine import ReactionEngine
+from .react.execute import ActionExecutor, ExecutorConfig
 from .schema import LogEvent
+from .sources import loghub
 from .template.fingerprint import describe_fingerprint
 from .template.miner import MinerConfig
 
@@ -91,7 +95,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     an = sub.add_parser("analyze", help="run the tier-1 pipeline over a log file")
-    an.add_argument("path", help="log file, or - for stdin")
+    an.add_argument("path", nargs="?", default=None,
+                    help="log file, or - for stdin (omit when using --loghub)")
+    an.add_argument("--loghub", metavar="NAME",
+                    help="analyze a loghub dataset instead of a file "
+                         f"({', '.join(sorted(loghub.DATASETS))})")
     an.add_argument("--app-package", action="append", default=[], metavar="PREFIX",
                     help="your package prefix, e.g. com.visa. (repeatable, strongly recommended)")
     an.add_argument("--service", default=None, help="service name when logs do not carry one")
@@ -110,8 +118,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     an.add_argument("--top", type=int, default=10)
     an.add_argument("--json", action="store_true", help="emit signals as JSON instead of a report")
     an.add_argument("--events-json", action="store_true", help="emit every event as JSON lines")
+    an.add_argument("--react", action="store_true",
+                    help="produce a reaction plan for every signal")
+    an.add_argument("--llm", action="store_true",
+                    help="use the model planner for signals no playbook matches "
+                         "(requires: pip install \"javalogai[llm]\")")
+    an.add_argument("--execute", action="store_true",
+                    help="actually run plan actions (default is dry-run)")
+    an.add_argument("--max-risk", default="notify",
+                    choices=[r.label for r in RiskLevel],
+                    help="ceiling on what may execute (default: notify)")
+    an.add_argument("--approve-all", action="store_true",
+                    help="auto-approve gated actions; requires --execute to have any effect")
+
+    lh = sub.add_parser("loghub", help="list or fetch loghub demo datasets")
+    lh.add_argument("loghub_command", choices=["list", "fetch"])
+    lh.add_argument("name", nargs="?", help="dataset name (for fetch)")
 
     args = parser.parse_args(argv)
+    if args.command == "loghub":
+        return _loghub(args)
+    if not args.path and not args.loghub:
+        parser.error("give a path, - for stdin, or --loghub NAME")
 
     config = PipelineConfig(
         app_packages=tuple(args.app_package),
@@ -128,21 +156,74 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     pipeline = Tier1Pipeline(config)
+    label = f"loghub:{args.loghub}" if args.loghub else args.path
+    lines = loghub.load(args.loghub) if args.loghub else _read_lines(args.path)
 
     if args.events_json:
-        for event in pipeline.events(_read_lines(args.path)):
+        for event in pipeline.events(lines):
             print(json.dumps(event.to_dict(), default=str))
         return 0
 
-    events, signals = pipeline.run(_read_lines(args.path))
+    events, signals = pipeline.run(lines)
     if args.state:
         pipeline.detector.save_state(f"{args.state}.detector.json")
 
+    plans = _react(args, signals) if args.react else []
+
     if args.json:
-        print(json.dumps([s.to_dict(include_sample=False) for s in signals], indent=2))
+        payload = ([p.to_dict() for p in plans] if args.react
+                   else [s.to_dict(include_sample=False) for s in signals])
+        print(json.dumps(payload, indent=2))
         return 0
 
-    print(_report(args.path, pipeline, events, signals, args.top))
+    print(_report(label, pipeline, events, signals, args.top))
+    for plan in plans:
+        print(plan.render())
+    if plans:
+        print(_execution_report(args, plans))
+    return 0
+
+
+def _react(args, signals) -> list:
+    planner = None
+    if args.llm:
+        from .react.llm import AnthropicPlanner
+        planner = AnthropicPlanner()
+    return ReactionEngine(planner=planner).plan_all(signals)
+
+
+def _execution_report(args, plans) -> str:
+    ceiling = RiskLevel[args.max_risk.upper()]
+    executor = ActionExecutor(
+        ExecutorConfig(dry_run=not args.execute, max_risk=ceiling),
+        approver=(lambda a, p: True) if args.approve_all else None,
+    )
+    for plan in plans:
+        executor.execute(plan)
+    counts = Counter(r.status for r in executor.audit)
+    mode = "EXECUTE" if args.execute else "dry-run"
+    lines = [f"\n\033[1mAction execution\033[0m  mode={mode}  ceiling={ceiling.label}"]
+    for status, n in counts.most_common():
+        lines.append(f"  {n:>4}  {status}")
+    if not args.execute:
+        lines.append("  \033[2mnothing was run; pass --execute to enable, "
+                     "and register handlers for the action kinds you want live\033[0m")
+    return "\n".join(lines)
+
+
+def _loghub(args) -> int:
+    if args.loghub_command == "list":
+        print(f"\n{'dataset':<12} {'jvm':<5} {'traces':<7} layout")
+        for d in loghub.DATASETS.values():
+            print(f"  {d.name:<10} {'yes' if d.jvm else 'no':<5} "
+                  f"{'yes' if d.has_stack_traces else 'no':<7} {d.layout}")
+        print("\n  Note: the published 2k samples are single-line; none carry stack traces.")
+        print("  Use fixtures/payment-service.log to exercise exceptions and fingerprints.\n")
+        return 0
+    if not args.name:
+        print("fetch needs a dataset name", file=sys.stderr)
+        return 2
+    print(loghub.fetch(args.name))
     return 0
 
 

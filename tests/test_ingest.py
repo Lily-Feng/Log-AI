@@ -12,10 +12,10 @@ parser = HeaderParser()
     [
         ("2024-01-15 10:23:45.123  INFO 1 --- [nio-8080-exec-3] c.v.p.PaymentService : ok",
          Severity.INFO, "c.v.p.PaymentService", "nio-8080-exec-3"),
-        ("2024-01-15 10:23:45.123 ERROR [http-nio-1] com.visa.P - bad",
-         Severity.ERROR, "com.visa.P", "http-nio-1"),
-        ("2024-01-15 10:23:45,123 WARN  [main] com.visa.Foo - retry",
-         Severity.WARN, "com.visa.Foo", "main"),
+        ("2024-01-15 10:23:45.123 ERROR [http-nio-1] com.lily.P - bad",
+         Severity.ERROR, "com.lily.P", "http-nio-1"),
+        ("2024-01-15 10:23:45,123 WARN  [main] com.lily.Foo - retry",
+         Severity.WARN, "com.lily.Foo", "main"),
     ],
 )
 def test_layout_variants(line, level, logger, thread):
@@ -52,7 +52,7 @@ def test_frame_with_jpms_module_prefix():
 
 
 def test_frame_without_source_location():
-    f = parse_frame("\tat com.visa.P.run(Native Method)", lambda c: True)
+    f = parse_frame("\tat com.lily.P.run(Native Method)", lambda c: True)
     assert f.file is None and f.line is None
 
 
@@ -60,21 +60,21 @@ def test_app_package_allowlist_beats_framework_denylist():
     # A vendor class that does not look like a framework is app code by the
     # deny-list default, but not when an allow-list is supplied.
     assert is_application_frame("com.acme.vendor.Thing") is True
-    assert is_application_frame("com.acme.vendor.Thing", ("com.visa.",)) is False
+    assert is_application_frame("com.acme.vendor.Thing", ("com.lily.",)) is False
     assert is_application_frame("org.springframework.web.X") is False
 
 
 CHAIN = """java.lang.IllegalStateException: outer
-\tat com.visa.A.a(A.java:1)
+\tat com.lily.A.a(A.java:1)
 \tat org.springframework.X.y(X.java:9)
 \t... 42 common frames omitted
 Caused by: java.sql.SQLTransientConnectionException: pool timeout
-\tat com.visa.B.b(B.java:2)
+\tat com.lily.B.b(B.java:2)
 \t... 3 more""".split("\n")
 
 
 def test_chain_order_and_root_cause():
-    chain = parse_exception_chain(CHAIN, app_packages=("com.visa.",))
+    chain = parse_exception_chain(CHAIN, app_packages=("com.lily.",))
     assert [e.exception_class for e in chain] == [
         "java.lang.IllegalStateException", "java.sql.SQLTransientConnectionException"
     ]
@@ -83,14 +83,14 @@ def test_chain_order_and_root_cause():
 
 
 def test_application_frames_are_separated_from_framework():
-    chain = parse_exception_chain(CHAIN, app_packages=("com.visa.",))
+    chain = parse_exception_chain(CHAIN, app_packages=("com.lily.",))
     app = [f.declaring_class for e in chain for f in e.frames if f.is_application]
-    assert app == ["com.visa.A", "com.visa.B"]
+    assert app == ["com.lily.A", "com.lily.B"]
 
 
 def test_multiline_exception_message_is_joined():
     chain = parse_exception_chain(
-        ["java.lang.IllegalArgumentException: line one", "line two continues", "\tat com.visa.A.a(A.java:1)"],
-        app_packages=("com.visa.",),
+        ["java.lang.IllegalArgumentException: line one", "line two continues", "\tat com.lily.A.a(A.java:1)"],
+        app_packages=("com.lily.",),
     )
     assert chain[0].message == "line one\nline two continues"

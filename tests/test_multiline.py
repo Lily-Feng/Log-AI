@@ -1,13 +1,13 @@
 from javalogai.ingest.multiline import MultilineAssembler
 
-TRACE = """2024-01-15 10:23:45.123 ERROR [main] com.visa.P - boom
+TRACE = """2024-01-15 10:23:45.123 ERROR [main] com.lily.P - boom
 java.lang.NullPointerException: acct is null
-\tat com.visa.P.run(P.java:1)
-\tat com.visa.Q.call(Q.java:2)
+\tat com.lily.P.run(P.java:1)
+\tat com.lily.Q.call(Q.java:2)
 \t... 12 common frames omitted
 Caused by: java.sql.SQLException: timeout
-\tat com.visa.R.db(R.java:3)
-2024-01-15 10:23:46.000  INFO [main] com.visa.P - recovered""".split("\n")
+\tat com.lily.R.db(R.java:3)
+2024-01-15 10:23:46.000  INFO [main] com.lily.P - recovered""".split("\n")
 
 
 def test_stack_trace_is_one_event():
@@ -24,7 +24,7 @@ def test_raw_roundtrip_preserves_every_line():
 
 
 def test_leading_orphan_lines_before_first_header():
-    lines = ["\tat com.visa.P.run(P.java:1)", "2024-01-15 10:00:00.000  INFO [m] c.v.P - ok"]
+    lines = ["\tat com.lily.P.run(P.java:1)", "2024-01-15 10:00:00.000  INFO [m] c.v.P - ok"]
     events = list(MultilineAssembler().assemble(lines))
     assert len(events) == 2
     assert events[0].matched_header is False
@@ -32,7 +32,7 @@ def test_leading_orphan_lines_before_first_header():
 
 
 def test_max_lines_guard_marks_truncated():
-    lines = ["2024-01-15 10:00:00.000 ERROR [m] c.v.P - boom"] + [f"\tat com.visa.P.f{i}(P.java:{i})" for i in range(50)]
+    lines = ["2024-01-15 10:00:00.000 ERROR [m] c.v.P - boom"] + [f"\tat com.lily.P.f{i}(P.java:{i})" for i in range(50)]
     events = list(MultilineAssembler(max_lines=10).assemble(lines))
     assert len(events) == 1
     assert events[0].truncated is True
