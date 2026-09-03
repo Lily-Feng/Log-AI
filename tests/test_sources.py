@@ -76,3 +76,22 @@ def test_aws_source_raises_a_clear_error_without_boto3():
         pass
     with pytest.raises(ImportError, match="javalogai\\[aws\\]"):
         list(S3LogSource(bucket="b"))
+
+
+def test_full_dataset_metadata_matches_what_was_measured():
+    hadoop = loghub.resolve("hadoop")
+    assert hadoop.full_has_traces is True
+    assert hadoop.full_mb == 2.6
+    # Only the full archive carries traces; the 2k sample never does.
+    assert hadoop.has_stack_traces is False
+
+
+def test_datasets_without_a_full_archive_are_rejected_clearly():
+    from dataclasses import replace
+    fake = replace(loghub.resolve("hadoop"), full_mb=None)
+    loghub.DATASETS["_fake"] = fake
+    try:
+        with pytest.raises(ValueError, match="no full archive"):
+            loghub.fetch_full("_fake")
+    finally:
+        del loghub.DATASETS["_fake"]

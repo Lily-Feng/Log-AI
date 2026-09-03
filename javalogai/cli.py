@@ -97,6 +97,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     an = sub.add_parser("analyze", help="run the tier-1 pipeline over a log file")
     an.add_argument("path", nargs="?", default=None,
                     help="log file, or - for stdin (omit when using --loghub)")
+    an.add_argument("--loghub-full", metavar="NAME",
+                    help="analyze the FULL Zenodo dataset (Hadoop is 2.6MB and has real traces)")
     an.add_argument("--loghub", metavar="NAME",
                     help="analyze a loghub dataset instead of a file "
                          f"({', '.join(sorted(loghub.DATASETS))})")
@@ -138,8 +140,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "loghub":
         return _loghub(args)
-    if not args.path and not args.loghub:
-        parser.error("give a path, - for stdin, or --loghub NAME")
+    if not args.path and not args.loghub and not args.loghub_full:
+        parser.error("give a path, - for stdin, --loghub NAME, or --loghub-full NAME")
 
     config = PipelineConfig(
         app_packages=tuple(args.app_package),
@@ -156,8 +158,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     pipeline = Tier1Pipeline(config)
-    label = f"loghub:{args.loghub}" if args.loghub else args.path
-    lines = loghub.load(args.loghub) if args.loghub else _read_lines(args.path)
+    if args.loghub_full:
+        label, lines = f"loghub-full:{args.loghub_full}", loghub.load_full(args.loghub_full)
+    elif args.loghub:
+        label, lines = f"loghub:{args.loghub}", loghub.load(args.loghub)
+    else:
+        label, lines = args.path, _read_lines(args.path)
 
     if args.events_json:
         for event in pipeline.events(lines):
@@ -213,12 +219,14 @@ def _execution_report(args, plans) -> str:
 
 def _loghub(args) -> int:
     if args.loghub_command == "list":
-        print(f"\n{'dataset':<12} {'jvm':<5} {'traces':<7} layout")
+        print(f"\n  {'dataset':<11}{'jvm':<6}{'full':>8}  {'traces':<8}layout")
         for d in loghub.DATASETS.values():
-            print(f"  {d.name:<10} {'yes' if d.jvm else 'no':<5} "
-                  f"{'yes' if d.has_stack_traces else 'no':<7} {d.layout}")
-        print("\n  Note: the published 2k samples are single-line; none carry stack traces.")
-        print("  Use fixtures/payment-service.log to exercise exceptions and fingerprints.\n")
+            size = f"{d.full_mb:.1f}MB" if d.full_mb else "-"
+            print(f"  {d.name:<11}{'yes' if d.jvm else 'no':<6}{size:>8}  "
+                  f"{'yes' if d.full_has_traces else 'no':<8}{d.layout}")
+        print("\n  'traces' is for the FULL dataset; the 2k samples are single-line always.")
+        print("  Hadoop full: 394k lines, 204k trace lines, 6,426 Caused-by chains.")
+        print("  Try: javalogai analyze --loghub-full hadoop --app-package org.apache.hadoop.\n")
         return 0
     if not args.name:
         print("fetch needs a dataset name", file=sys.stderr)

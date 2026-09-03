@@ -154,10 +154,39 @@ Logback defaults. All four now parse at 100%, including ZooKeeper's habit of
 packing the logger inside the thread bracket
 (`[QuorumPeer[myid=1]/...:FastLeaderElection@774]`).
 
-One limitation, stated plainly: **the published 2k samples contain no stack
-traces.** They exercise header parsing, template mining and baselining against
-real data, but not multiline assembly, exception chains or fingerprinting. The
-synthetic `fixtures/payment-service.log` remains the fixture for those.
+The published **2k samples contain no stack traces** — they are single-line
+only. The **full datasets on Zenodo** do. Hadoop is the one to reach for:
+
+```bash
+javalogai analyze --loghub-full hadoop --app-package org.apache.hadoop.
+```
+
+2.6 MB compressed; 394k lines of which 204k are stack-trace continuations,
+across 6,426 `Caused by:` chains, from a cluster with injected faults (machine
+down, network disconnect, disk full).
+
+### What the full dataset showed
+
+```
+Input        394,310 raw lines -> 180,897 logical events (100.0% parsed)
+Templates    259  (1,522 raw lines per template)
+Failures     23 distinct fingerprint(s) across 6,233 events with a stack trace
+
+783f728cd71bfb3b  x5303  NoRouteToHostException -> NoRouteToHostException
+    NoRouteToHostException at org.apache.hadoop.net.NetUtils.wrapWithMessage
+    5 distinct call paths merged into this one failure
+```
+
+- **Multiline assembly**: 394k physical lines became 181k logical events, all
+  headers parsed. Generic single-line tooling would have seen 394k "events".
+- **Fingerprinting**: 6,233 exceptions collapsed to **23 distinct failures**
+  (271:1), and the merges are correct — 5,303 "No route to host" events arriving
+  through 5 different call paths are one injected network fault, while the
+  disk-full (`FSError -> IOException`) and connection-reset failures stay
+  separate. Varying values in a message (`firstBadLink as 10.86.169.121` vs
+  `...165.66`) merge; differing root-cause *classes* do not.
+- **Throughput**: ~26k lines/sec single-threaded, no tuning.
+- **It found a real bug in this code**: 58 false PAN redactions, fixed above.
 
 **AWS** sources cover the two shapes Centralized Logging with OpenSearch
 (formerly "Log Hub") leaves logs in — S3 objects and CloudWatch Logs streams.
@@ -189,9 +218,23 @@ throwable chain plus frame 0 collapses them to one failure. Raise
 
 **Framework frames are excluded.** A 60-frame trace is typically 4 frames of
 your code and 56 of Tomcat, Spring and Hibernate. Pass `app_packages=("com.lily.",)`
-to make frame classification an exact allow-list — it is the single
-highest-value piece of configuration here. Without it, a deny-list of known
-framework prefixes is used, which misclassifies vendor code.
+to make frame classification an exact allow-list rather than a deny-list guess.
+
+Measured on 6,233 real exceptions from the full Hadoop dataset, it matters less
+at the default `top_n=1` than an earlier version of this README claimed, and
+more as `top_n` rises:
+
+| `top_n` | with `app_packages` | deny-list default |
+| --- | --- | --- |
+| **1** (default) | **23** | 26 |
+| 3 | 28 | 29 |
+| 10 | 38 | 45 |
+
+The `top_n=1` default is doing most of the work — 23 fingerprints against 38 at
+`top_n=10` on identical input. `app_packages` is still worth setting: it fixes
+the throw site reported in triage output, and this corpus is an unusually
+forgiving case because `org.apache.` sits in the built-in framework deny-list,
+so nearly every Hadoop trace fell back to all-frames scoring anyway.
 
 **Line numbers are excluded from fingerprints by default.** Otherwise editing an
 import above the throw site changes the fingerprint and breaks exactly the
@@ -205,6 +248,13 @@ logs. Two related traps, both regression-tested:
 - Digit runs *inside hex identifiers* pass Luhn about one time in ten. Matching
   them raises false PCI alarms **and corrupts the trace id** that correlation
   depends on, so the pattern guards against word characters, not just digits.
+- **Luhn alone is not enough at volume.** Roughly one in ten random digit runs
+  satisfies the checksum, so 394k lines of real Hadoop logs produced **58 false
+  PAN redactions** — every one of them a millisecond epoch timestamp such as
+  `1445076437777`. Card numbers are now validated against issuer prefixes (IIN)
+  and per-network lengths as well: no network issues cards beginning with 0, 1,
+  7, 8 or 9, which removes the entire timestamp class. False positives on that
+  corpus went 58 → 0 with no loss on real card numbers.
 - Redaction counts report values actually redacted, not patterns matched — "we
   redacted N card numbers" has to be literally true for an audit.
 
@@ -287,5 +337,5 @@ javalogai/
 ## Tests
 
 ```bash
-python -m pytest -q       # 110 tests
+python -m pytest -q       # 123 tests
 ```

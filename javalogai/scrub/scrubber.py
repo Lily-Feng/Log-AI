@@ -29,6 +29,44 @@ class Rule(NamedTuple):
     optional: bool = False
 
 
+#: Issuer Identification Number prefixes and the card lengths each network
+#: actually issues. Luhn alone is not enough at volume: roughly one in ten
+#: random digit runs passes the checksum, so on a corpus with millisecond epoch
+#: timestamps (13 digits, and every one of them starting with `1`) the checksum
+#: leaks a steady trickle of false positives. No network issues cards starting
+#: with 0, 1, 7, 8 or 9, so the prefix test removes that entire class.
+_CARD_NETWORKS: tuple[tuple[str, re.Pattern[str], frozenset[int]], ...] = (
+    ("visa", re.compile(r"^4"), frozenset({13, 16, 19})),
+    ("mastercard",
+     re.compile(r"^(?:5[1-5]|2(?:22[1-9]|2[3-9]\d|[3-6]\d{2}|7[01]\d|720))"),
+     frozenset({16})),
+    ("amex", re.compile(r"^3[47]"), frozenset({15})),
+    ("discover",
+     re.compile(r"^(?:6011|64[4-9]|65|622(?:12[6-9]|1[3-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))"),
+     frozenset({16, 19})),
+    ("jcb", re.compile(r"^35(?:2[89]|[3-8]\d)"), frozenset({16, 17, 18, 19})),
+    ("diners", re.compile(r"^3(?:0[0-5]|095|[68])"), frozenset({14, 16, 19})),
+    ("unionpay", re.compile(r"^62"), frozenset({16, 17, 18, 19})),
+    ("maestro",
+     re.compile(r"^(?:5018|5020|5038|5893|6304|6759|676[1-3])"),
+     frozenset(range(12, 20))),
+)
+
+
+def card_network(digits: str) -> str | None:
+    """Name the issuing network whose IIN and length the digits match, if any."""
+    length = len(digits)
+    for name, prefix, lengths in _CARD_NETWORKS:
+        if length in lengths and prefix.match(digits):
+            return name
+    return None
+
+
+def is_probable_card(digits: str) -> bool:
+    """A card number must look like one *and* checksum. Both, not either."""
+    return bool(digits.isdigit() and card_network(digits) and luhn_valid(digits))
+
+
 def luhn_valid(digits: str) -> bool:
     """Standard mod-10 checksum used by all major card networks."""
     if not digits.isdigit() or not 13 <= len(digits) <= 19:
@@ -48,8 +86,8 @@ def _make_pan_replacer(keep_last4: bool) -> Replacer:
     def replace(m: re.Match[str]) -> str:
         raw = m.group(0)
         digits = re.sub(r"[ -]", "", raw)
-        if not luhn_valid(digits):
-            return raw  # shape matched but checksum failed: leave it alone
+        if not is_probable_card(digits):
+            return raw  # not a card shape, or checksum failed: leave it alone
         return f"[PAN:...{digits[-4:]}]" if keep_last4 else "[PAN]"
 
     return replace
