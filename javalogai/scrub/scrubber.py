@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, NamedTuple
+from typing import Callable, Container, Iterable, NamedTuple
 
 Replacer = Callable[[re.Match[str]], str]
 
@@ -53,18 +53,29 @@ _CARD_NETWORKS: tuple[tuple[str, re.Pattern[str], frozenset[int]], ...] = (
 )
 
 
-def card_network(digits: str) -> str | None:
-    """Name the issuing network whose IIN and length the digits match, if any."""
+def card_network(digits: str, allowed_lengths: Container[int] | None = None) -> str | None:
+    """Name the issuing network whose IIN and length the digits match, if any.
+
+    `allowed_lengths` narrows acceptance to the card lengths your systems
+    actually handle. It only ever removes matches, so it trades recall for
+    precision and must be set deliberately -- see :class:`Scrubber`.
+    """
     length = len(digits)
+    if allowed_lengths is not None and length not in allowed_lengths:
+        return None
     for name, prefix, lengths in _CARD_NETWORKS:
         if length in lengths and prefix.match(digits):
             return name
     return None
 
 
-def is_probable_card(digits: str) -> bool:
+def is_probable_card(digits: str, allowed_lengths: Container[int] | None = None) -> bool:
     """A card number must look like one *and* checksum. Both, not either."""
-    return bool(digits.isdigit() and card_network(digits) and luhn_valid(digits))
+    return bool(
+        digits.isdigit()
+        and card_network(digits, allowed_lengths)
+        and luhn_valid(digits)
+    )
 
 
 def luhn_valid(digits: str) -> bool:
@@ -82,11 +93,11 @@ def luhn_valid(digits: str) -> bool:
     return total % 10 == 0
 
 
-def _make_pan_replacer(keep_last4: bool) -> Replacer:
+def _make_pan_replacer(keep_last4: bool, allowed_lengths: Container[int] | None) -> Replacer:
     def replace(m: re.Match[str]) -> str:
         raw = m.group(0)
         digits = re.sub(r"[ -]", "", raw)
-        if not is_probable_card(digits):
+        if not is_probable_card(digits, allowed_lengths):
             return raw  # not a card shape, or checksum failed: leave it alone
         return f"[PAN:...{digits[-4:]}]" if keep_last4 else "[PAN]"
 
@@ -143,14 +154,29 @@ class Scrubber:
         enable_optional: Iterable[str] = (),
         disable: Iterable[str] = (),
         pan_keep_last4: bool = False,
+        pan_lengths: Iterable[int] | None = None,
         extra_rules: Iterable[Rule] = (),
     ) -> None:
+        """`pan_lengths` narrows PAN matching to those card lengths.
+
+        Leave it unset unless you know what your systems carry. The default
+        accepts every length the networks issue, which is the safe direction:
+        over-redaction costs debuggability, under-redaction costs a PCI finding.
+
+        It exists because 19 digits is a legitimate Visa length and also the
+        shape of a Spark RPC request id. Across 33.2M lines of real Spark logs
+        seven such ids passed both the IIN and Luhn tests -- a rate of roughly
+        one in five million lines, but not zero, and each one corrupts an
+        identifier that correlation depends on. A shop that only ever handles
+        16-digit cards can pass `pan_lengths={16}` and remove the class.
+        """
         # The guards must exclude word characters, not just digits: a hex trace id
         # such as `c69589cd62e07957166693998c2eb4ef` contains a 14-digit run that
         # passes Luhn roughly one time in ten. Matching it would both raise false
         # PAN alarms and corrupt the trace id that correlation depends on.
+        lengths = frozenset(pan_lengths) if pan_lengths is not None else None
         pan = Rule("pan", re.compile(r"(?<![\w.])(?:\d[ -]?){12,18}\d(?![\w.])"),
-                   _make_pan_replacer(pan_keep_last4))
+                   _make_pan_replacer(pan_keep_last4, lengths))
         base = [_JWT, _BEARER, _SECRET_KV, _CVV, _EMAIL, _SSN, _IBAN, pan, _PHONE, _IPV4, _UUID]
         enabled = set(enable_optional)
         disabled = set(disable)

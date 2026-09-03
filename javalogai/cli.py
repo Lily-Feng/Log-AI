@@ -149,6 +149,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="persist templates and baselines here so they survive restarts")
     an.add_argument("--pan-keep-last4", action="store_true",
                     help="redact to [PAN:...1234] instead of [PAN]")
+    an.add_argument("--pan-lengths", default=None, metavar="N,N",
+                    help="restrict PAN matching to these card lengths (e.g. 16). "
+                         "Narrows only -- removes matches, never adds them")
     an.add_argument("--scrub-optional", default="", metavar="NAMES",
                     help="comma-separated optional rules to enable: ipv4,phone,uuid")
     an.add_argument("--top", type=int, default=10)
@@ -181,6 +184,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         app_packages=tuple(args.app_package),
         default_service=args.service,
         pan_keep_last4=args.pan_keep_last4,
+        pan_lengths=([int(x) for x in args.pan_lengths.split(',')]
+                     if args.pan_lengths else None),
         scrub_optional=tuple(x for x in args.scrub_optional.split(",") if x),
         miner=MinerConfig(sim_th=args.sim_th, persistence_path=args.state),
         detector=DetectorConfig(

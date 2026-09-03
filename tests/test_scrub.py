@@ -124,3 +124,31 @@ def test_iin_and_luhn_are_both_required():
     assert card_network("4029183746152839") == "visa"   # right shape
     assert not luhn_valid("4029183746152839")           # wrong checksum
     assert not is_probable_card("4029183746152839")     # so: not a card
+
+
+# -- 19-digit precision, found on the full Spark dataset ---------------------
+
+SPARK_RPC_ID = "4661816796531593848"   # a real Spark RPC request id
+
+
+def test_nineteen_digit_ids_are_accepted_by_default_because_visa_issues_that_length():
+    # Not a bug to be silently fixed: 19 digits is a legitimate Visa length, so
+    # narrowing by default would under-redact real cards. Across 33.2M lines of
+    # Spark logs, 7 RPC ids passed both IIN and Luhn -- about one per five
+    # million lines. Over-redaction is the safe direction, so this stays on.
+    assert is_probable_card(SPARK_RPC_ID)
+    assert card_network(SPARK_RPC_ID) == "visa"
+
+
+def test_pan_lengths_narrows_away_the_residual():
+    assert not is_probable_card(SPARK_RPC_ID, {16})
+    scrubber = Scrubber(pan_lengths={16})
+    line = f"Failed to send RPC {SPARK_RPC_ID} to mesos-slave-18"
+    assert scrubber.scrub(line).text == line          # id preserved
+    assert scrubber.scrub("card 4111111111111111").text == "card [PAN]"   # card still caught
+
+
+def test_pan_lengths_only_ever_removes_matches():
+    # A length the networks do not issue cannot be forced in.
+    assert card_network("4111111111111111", {17}) is None
+    assert Scrubber(pan_lengths={17}).scrub("card 4111111111111111").text.endswith("1111")

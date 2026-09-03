@@ -194,6 +194,51 @@ Both yield plain lines, so multiline assembly still happens on our side, because
 neither source preserves the notion of a logical event. Requires
 `pip install "javalogai[aws]"`; boto3 is imported lazily.
 
+### Scale: the full Spark dataset
+
+```bash
+javalogai analyze --loghub-full spark --app-package org.apache.spark.
+```
+
+2.7 GB, 3,852 files, **33.2M lines** — 84x Hadoop, and a different failure mix
+(PySpark `PythonException`, `RpcTimeoutException`, YARN container failures).
+
+```
+Input        33,236,604 raw lines -> 27,410,255 logical events (100.0% parsed)
+Templates    259  (128,327 raw lines per template)
+Failures     55 distinct fingerprint(s) across 8,058 events with a stack trace
+Peak RSS     33.5 MB
+```
+
+- **Memory stayed at 33.5 MB against a 2.7 GB corpus** — bounded by distinct
+  templates and failures, not by input size, which is the design premise.
+- **Scala frames parse**: name-mangled methods
+  (`RpcTimeout.org$apache$spark$rpc$RpcTimeout$$createRpcTimeoutException`),
+  anonymous functions (`$$anonfun$addMessageIfTimeout$1.applyOrElse`), `.scala`
+  sources, `scala.*` as framework. Chains up to five deep
+  (`SparkException → YarnException → Error → SparkException → YarnException`).
+- **`top_n=1` is stable across recompiles.** Scala numbers anonymous functions
+  at compile time, so those names shift between builds. Frame 0 is the throw
+  site and is a real named method — no throw site in the sample was
+  compiler-generated — so the fingerprint survives a renumbering that would
+  change it at `top_n=5`. There is a test pinning this.
+- ~10.5k lines/sec here against ~26k on Hadoop, sharing a core with another run.
+
+**Two gaps it found**, both fixed:
+
+1. **83 of 183 signals matched no playbook** — every one a rate breach. The only
+   rate-breach playbook was the payments-specific decline spike, so any
+   non-payments service hit "manual triage required" for its commonest signal
+   kind. A generic rate-breach playbook now covers them at low confidence;
+   coverage is 183/183 and the payments playbook still wins where it applies.
+2. **7 PAN false positives survived the IIN fix** — 19-digit Spark RPC request
+   ids such as `4661816796531593848`. 19 is a legitimate Visa length, the id
+   starts with 4, and it passes Luhn by chance. That is about one per five
+   million lines, and it is *not* silently narrowed away: dropping 19-digit
+   support would under-redact real cards. Instead `pan_lengths` lets a shop that
+   only handles 16-digit cards remove the class:
+   `Scrubber(pan_lengths={16})`, or `--pan-lengths 16`.
+
 ## Why this exists rather than a generic log-AI library
 
 Generic log tooling assumes one line is one event. That assumption is false on
@@ -337,5 +382,5 @@ javalogai/
 ## Tests
 
 ```bash
-python -m pytest -q       # 123 tests
+python -m pytest -q       # 133 tests
 ```

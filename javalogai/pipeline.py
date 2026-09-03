@@ -44,6 +44,8 @@ class PipelineConfig:
     scrub_optional: Sequence[str] = ()
     scrub_disable: Sequence[str] = ()
     pan_keep_last4: bool = False
+    #: Narrow PAN matching to these card lengths; None accepts all issued lengths.
+    pan_lengths: Sequence[int] | None = None
     miner: MinerConfig = field(default_factory=MinerConfig)
     detector: DetectorConfig = field(default_factory=DetectorConfig)
 
@@ -75,6 +77,7 @@ class Tier1Pipeline:
             enable_optional=self.config.scrub_optional,
             disable=self.config.scrub_disable,
             pan_keep_last4=self.config.pan_keep_last4,
+            pan_lengths=self.config.pan_lengths,
         )
         self.miner = TemplateMiner(self.config.miner)
         self.detector = BaselineDetector(self.config.detector)
