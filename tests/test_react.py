@@ -1,17 +1,17 @@
 import pytest
 
-from javalogai.baseline.detector import (
+from logai.baseline.detector import (
     NOVEL_FINGERPRINT, NOVEL_TEMPLATE, RATE_BREACH, SEVERITY_BURST, Signal,
 )
-from javalogai.ingest.exceptions import parse_exception_chain
-from javalogai.react.actions import (
+from logai.ingest.exceptions import parse_exception_chain
+from logai.react.actions import (
     DENIED, DRY_RUN, EXECUTED, FAILED, NO_HANDLER, SKIPPED_RISK, Action, RiskLevel,
 )
-from javalogai.react.engine import ReactionEngine, build_evidence
-from javalogai.react.execute import ActionExecutor, ExecutorConfig
-from javalogai.react.llm import AnthropicPlanner, parse_risk
-from javalogai.react.plan import LLM, PLAYBOOK, FALLBACK
-from javalogai.schema import LogEvent, Severity
+from logai.react.engine import ReactionEngine, build_evidence
+from logai.react.execute import ActionExecutor, ExecutorConfig
+from logai.react.llm import AnthropicPlanner, parse_risk
+from logai.react.plan import LLM, PLAYBOOK, FALLBACK
+from logai.schema import LogEvent, Severity
 
 APP = ("com.lily.",)
 

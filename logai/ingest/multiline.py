@@ -28,7 +28,11 @@ from typing import Iterable, Iterator
 # A line starting an event: leading timestamp in any of the common JVM layouts.
 # 2024-01-15 10:23:45.123 | 2024-01-15T10:23:45,123 | 15-Jan-2024 10:23:45
 DEFAULT_HEADER_PATTERN = re.compile(
-    r"""^(?:
+    # A leading non-space token is allowed before the timestamp (a source
+    # filename, hostname or syslog tag). Continuation lines are unaffected:
+    # stack-trace frames begin with whitespace, and `Caused by:` carries no
+    # timestamp, so neither can be mistaken for the start of an event.
+    r"""^(?:\S+[ \t]+)?(?:
         \d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}
       | \d{2}[-/][A-Za-z]{3}[-/]\d{4}\s+\d{2}:\d{2}:\d{2}
       | \[\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}

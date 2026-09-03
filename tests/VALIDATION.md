@@ -9,7 +9,7 @@ logs nobody wrote it for. Every entry below came from running a real corpus, not
 from review. Each one ends in a named test, so a regression is a failing test
 rather than a lost memory.
 
-Last run: 154 tests, all passing.
+Last run: 164 tests, all passing.
 
 The test references below are themselves checked by
 `test_validation_doc.py` — rename a cited test and this document fails, rather
@@ -22,20 +22,20 @@ than quietly becoming folklore.
 | Corpus | Size | Shape | Exercises |
 | --- | --- | --- | --- |
 | `fixtures/payment-service.log` | 1,837 lines | Synthetic Spring Boot, `com.lily.` | Exceptions, fingerprints, PCI scrubbing, baselines |
-| loghub 2k samples | 4 × 2,000 lines | Real Hadoop / ZooKeeper / Spark / HDFS | Header layouts only — **no stack traces** |
+| loghub 2k samples | 5 × 2,000 lines | Real Hadoop / ZooKeeper / Spark / HDFS / OpenStack | Header layouts only — **no stack traces** |
 | loghub full Hadoop | 394k lines, 978 files | Real, injected faults | Real traces, `Caused by:` chains |
 | loghub full Spark | 33.2M lines, 2.7 GB, 3,852 files | Real, Scala/PySpark | Scale, memory bound, Scala frames |
 
 Reproduce:
 
 ```bash
-javalogai analyze fixtures/payment-service.log --app-package com.lily.
-javalogai analyze --loghub-full hadoop --app-package org.apache.hadoop.
-javalogai analyze --loghub-full spark  --app-package org.apache.spark.
+logai analyze fixtures/payment-service.log --app-package com.lily.
+logai analyze --loghub-full hadoop --app-package org.apache.hadoop.
+logai analyze --loghub-full spark  --app-package org.apache.spark.
 ```
 
 The full datasets download from Zenodo on first use and cache under
-`~/.cache/javalogai/loghub/`.
+`~/.cache/logai/loghub/`.
 
 ---
 
@@ -181,7 +181,32 @@ breach alone says something *changed*, not that something *broke*. Coverage
 → `test_react.py::test_generic_rate_breach_has_a_catch_all`
 → `test_react.py::test_payments_decline_spike_still_beats_the_generic_rate_breach`
 
-### 6. Redaction counts reported matches, not redactions
+### 6. Non-JVM logs did not parse at all
+
+**Found on:** loghub OpenStack (Python) — **0.0% of headers parsed**.
+
+OpenStack leads each line with a source filename before the real timestamp
+(`nova-api.log.1.2017-05-16_13:53:08 2017-05-16 00:00:00.008 25746 INFO ...`),
+and every pattern anchored the timestamp at position 0.
+
+The failure was quiet and worse than it looked: with no header match there is no
+timestamp and no severity, and template mining then tokenises the timestamp
+itself, so the top "templates" were structural noise rather than message
+semantics. A caller would have seen output, just meaningless output.
+
+Fixed by allowing one optional leading token before the timestamp. **0% → 100%**
+parsed, 19 noise templates → 32 semantic ones
+(`<IP> ... HTTP/<NUM>" status: <NUM> len: <NUM>`). JVM formats are unaffected —
+they have no prefix, so the group does not participate — and full Hadoop output
+is byte-identical after the change.
+
+→ `test_sources.py::test_prefixed_timestamp_format_parses`
+→ `test_sources.py::test_prefixed_line_is_recognised_as_an_event_header`
+→ `test_sources.py::test_non_jvm_logs_use_the_pipeline_without_the_exception_layer`
+→ `test_sources.py::test_widening_the_header_pattern_did_not_swallow_continuations`
+   (the widened pattern must not turn stack-trace lines into event starts)
+
+### 7. Redaction counts reported matches, not redactions
 
 `re.subn` counts pattern matches, so a Luhn-rejected order ID was tallied as a
 redacted card. "We redacted N card numbers" has to be literally true for an
@@ -189,14 +214,14 @@ audit, so callable replacers now count what actually changed.
 
 → `test_scrub.py::test_hit_counts_reflect_actual_redactions_not_matches`
 
-### 7. Rate breach fired on ordinary jitter
+### 8. Rate breach fired on ordinary jitter
 
 A z-score alone flagged 27 → 34 requests/min as an incident. Breaches now require
 a multiple of baseline (default 2.0×) as well as a z-score.
 
 → `test_baseline.py::test_ordinary_jitter_does_not_fire`
 
-### 8. Novelty re-fired on every restart
+### 9. Novelty re-fired on every restart
 
 drain3 persists its templates, but the detector kept a *separate* in-memory
 `seen_templates` set — so every restart re-announced all templates as new. In
@@ -205,7 +230,7 @@ Novelty now derives from the miner's persisted state.
 
 Verified on real data: full Hadoop cold run 99 signals → warm run 5.
 
-### 9. CLI held every event in memory
+### 10. CLI held every event in memory
 
 `analyze` materialised every `LogEvent` to compute report aggregates. Fine at
 Hadoop's 181k events, fatal at Spark's 27.4M. `ReportData` now accumulates only
@@ -299,14 +324,14 @@ Stated plainly, because "tested" and "tested against this" are different claims.
 | `test_scrub.py` | 33 | PAN/IIN/Luhn, secrets, audit counts, deliberate over-redaction |
 | `test_react.py` | 33 | Playbook matching and ranking, routing escalation, execution gates, planner safety |
 | `test_ingest.py` | 16 | Header layouts, frame parsing (Java + Scala), exception chains |
-| `test_sources.py` | 14 | loghub registry and real layouts, AWS lazy import |
+| `test_sources.py` | 20 | loghub registry and real layouts, AWS lazy import |
 | `test_pipeline.py` | 12 | End-to-end on the fixture, streaming/batch parity |
 | `test_fingerprint.py` | 9 | Entry-path dedup, `top_n` semantics, line-number stability |
 | `test_baseline.py` | 8 | Bucketing, novelty, rate breach, jitter suppression |
 | `test_multiline.py` | 5 | Stack-trace assembly, orphan lines, truncation guard |
 | `test_cli.py` | 3 | Report, JSON signals, JSON-lines events |
-| `test_validation_doc.py` | 21 | Verifies every finding above still names a real test |
-| **Total** | **154** | |
+| `test_validation_doc.py` | 25 | Verifies every finding above still names a real test |
+| **Total** | **164** | |
 
 ```bash
 python -m pytest -q

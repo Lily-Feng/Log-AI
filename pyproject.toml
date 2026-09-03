@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "javalogai"
+name = "logai"
 version = "0.2.0"
-description = "Tier-1 deterministic log intelligence for JVM applications: multiline assembly, PCI scrubbing, template mining, exception fingerprinting, and baseline breach detection."
+description = "Tiered log intelligence: multiline assembly, PCI scrubbing, template mining, exception fingerprinting, baseline breach detection, and gated reaction plans."
 requires-python = ">=3.10"
 dependencies = ["drain3>=0.9.11"]
 
@@ -15,10 +15,10 @@ aws = ["boto3>=1.28"]
 llm = ["anthropic>=0.40"]
 
 [project.scripts]
-javalogai = "javalogai.cli:main"
+logai = "logai.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["javalogai*"]
+include = ["logai*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

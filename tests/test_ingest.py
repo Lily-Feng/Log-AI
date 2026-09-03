@@ -1,8 +1,8 @@
 import pytest
 
-from javalogai.ingest.exceptions import is_application_frame, parse_exception_chain, parse_frame
-from javalogai.ingest.java_format import HeaderParser, parse_timestamp
-from javalogai.schema import Severity
+from logai.ingest.exceptions import is_application_frame, parse_exception_chain, parse_frame
+from logai.ingest.java_format import HeaderParser, parse_timestamp
+from logai.schema import Severity
 
 parser = HeaderParser()
 

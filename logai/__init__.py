@@ -1,4 +1,10 @@
-"""javalogai -- tiered log intelligence for JVM applications."""
+"""logai -- tiered log intelligence.
+
+Format-agnostic through template mining and baselining; strongest on JVM
+logs, where stack traces are reassembled into single events and failures are
+fingerprinted by throw site. Non-JVM logs skip the exception layer and use
+the rest of the pipeline unchanged.
+"""
 
 from .baseline.detector import BaselineDetector, DetectorConfig, Signal
 from .pipeline import PipelineConfig, PipelineStats, Tier1Pipeline

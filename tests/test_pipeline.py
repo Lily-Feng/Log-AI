@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from javalogai import PipelineConfig, Tier1Pipeline
-from javalogai.baseline.detector import NOVEL_FINGERPRINT, NOVEL_TEMPLATE, RATE_BREACH
-from javalogai.schema import Severity
+from logai import PipelineConfig, Tier1Pipeline
+from logai.baseline.detector import NOVEL_FINGERPRINT, NOVEL_TEMPLATE, RATE_BREACH
+from logai.schema import Severity
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "payment-service.log"
 

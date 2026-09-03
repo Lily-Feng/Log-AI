@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from javalogai.cli import main
+from logai.cli import main
 
 FIXTURE = str(Path(__file__).parent.parent / "fixtures" / "payment-service.log")
 

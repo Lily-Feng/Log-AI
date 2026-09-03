@@ -60,6 +60,17 @@ HDFS_LEGACY = re.compile(
     rf"{_LEVEL}\s+{_LOGGER}\s*:\s+(?P<msg>.*)$"
 )
 
+#: Many non-JVM emitters put something before the timestamp -- a source
+#: filename, a hostname, a syslog tag. OpenStack's nova logs lead with
+#: `nova-api.log.1.2017-05-16_13:53:08` before the real timestamp. Allowing one
+#: leading token costs nothing on JVM logs (they have no prefix, so the group
+#: simply does not participate) and is the difference between parsing such a
+#: format and not parsing it at all.
+PREFIXED = re.compile(
+    rf"^(?P<prefix>\S+)?[ \t]*{_TS}\s+(?P<pid>\d+\s+)?\[?{_LEVEL}\]?\s+"
+    rf"(?:{_LOGGER}\s+)?(?:\[(?P<context>[^\]]*)\]\s*)?(?P<msg>.*)$"
+)
+
 #: Last resort: a timestamp and a level, everything after is the message.
 GENERIC = re.compile(rf"^{_TS}\s+\[?{_LEVEL}\]?\s+(?P<msg>.*)$")
 
@@ -71,6 +82,7 @@ DEFAULT_PATTERNS: tuple[re.Pattern[str], ...] = (
     ZOOKEEPER,
     SPARK,
     HDFS_LEGACY,
+    PREFIXED,
     GENERIC,
 )
 

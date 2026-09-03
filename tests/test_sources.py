@@ -1,9 +1,9 @@
 import pytest
 
-from javalogai.ingest.java_format import HeaderParser
-from javalogai.ingest.multiline import MultilineAssembler
-from javalogai.schema import Severity
-from javalogai.sources import loghub
+from logai.ingest.java_format import HeaderParser
+from logai.ingest.multiline import MultilineAssembler
+from logai.schema import Severity
+from logai.sources import loghub
 
 parser = HeaderParser()
 JVM = [n for n, d in loghub.DATASETS.items() if d.jvm]
@@ -61,20 +61,20 @@ def test_loghub_layouts_are_recognised_as_event_headers(line):
 
 
 def test_aws_sources_import_without_boto3():
-    from javalogai.sources.aws import CloudWatchLogsSource, S3LogSource
+    from logai.sources.aws import CloudWatchLogsSource, S3LogSource
     assert S3LogSource(bucket="b").prefix == ""
     assert CloudWatchLogsSource(log_group="g").limit is None
 
 
 def test_aws_source_raises_a_clear_error_without_boto3():
     pytest.importorskip("builtins")
-    from javalogai.sources.aws import S3LogSource
+    from logai.sources.aws import S3LogSource
     try:
         import boto3  # noqa: F401
         pytest.skip("boto3 installed; the lazy-import path is not exercised")
     except ImportError:
         pass
-    with pytest.raises(ImportError, match="javalogai\\[aws\\]"):
+    with pytest.raises(ImportError, match="logai\\[aws\\]"):
         list(S3LogSource(bucket="b"))
 
 
@@ -95,3 +95,50 @@ def test_datasets_without_a_full_archive_are_rejected_clearly():
             loghub.fetch_full("_fake")
     finally:
         del loghub.DATASETS["_fake"]
+
+
+# -- non-JVM formats: the generality claim, checked ---------------------------
+
+def test_prefixed_timestamp_format_parses():
+    # OpenStack leads with a source filename before the real timestamp. Anchoring
+    # the timestamp at position 0 gave 0% parse on that corpus, which made
+    # templates structural noise (they tokenised the timestamp itself) rather
+    # than message semantics.
+    h = parser.parse(
+        "nova-api.log.1.2017-05-16_13:53:08 2017-05-16 00:00:00.008 25746 INFO "
+        "nova.osapi_compute.wsgi.server [req-38101a0b-2096-447d-96ea-a692162415ae "
+        "113d3a99 54fadb41 - - -] 10.11.10.1 \"GET /v2/servers/detail HTTP/1.1\" status: 200"
+    )
+    assert h.matched
+    assert h.severity is Severity.INFO
+    assert h.logger == "nova.osapi_compute.wsgi.server"
+    assert h.timestamp is not None and h.timestamp.year == 2017
+    assert h.message.startswith("10.11.10.1")
+
+
+def test_prefixed_line_is_recognised_as_an_event_header():
+    assert MultilineAssembler().is_header(
+        "nova-api.log.1.2017-05-16_13:53:08 2017-05-16 00:00:00.008 25746 INFO nova.x: msg"
+    )
+
+
+@pytest.mark.parametrize("line", [
+    "\tat com.lily.payments.PaymentService.authorize(PaymentService.java:142)",
+    "Caused by: java.sql.SQLException: timeout",
+    "\t... 42 common frames omitted",
+])
+def test_widening_the_header_pattern_did_not_swallow_continuations(line):
+    # The prefix group allows a leading token before the timestamp. Continuation
+    # lines must still not look like the start of a new event, or every stack
+    # trace would fragment.
+    assert not MultilineAssembler().is_header(line)
+
+
+def test_non_jvm_logs_use_the_pipeline_without_the_exception_layer():
+    from logai import PipelineConfig, Tier1Pipeline
+    pipeline = Tier1Pipeline(PipelineConfig(default_service="openstack"))
+    events = list(pipeline.events(loghub.load("openstack")))
+    assert pipeline.stats.parsed_events == pipeline.stats.events   # 100% parsed
+    assert pipeline.stats.events_with_exception == 0               # no JVM traces
+    assert pipeline.stats.templates > 1                            # mining still works
+    assert all(e.fingerprint is None for e in events)              # layer no-ops cleanly

@@ -1,5 +1,5 @@
-from javalogai.ingest.exceptions import parse_exception_chain
-from javalogai.template.fingerprint import DEFAULT_TOP_N, describe_fingerprint, fingerprint_exception
+from logai.ingest.exceptions import parse_exception_chain
+from logai.template.fingerprint import DEFAULT_TOP_N, describe_fingerprint, fingerprint_exception
 
 APP = ("com.lily.",)
 HEAD = ["java.lang.NullPointerException: acct is null",

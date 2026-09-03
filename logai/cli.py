@@ -1,6 +1,6 @@
 """Command line entry point.
 
-    javalogai analyze fixtures/payment-service.log --app-package com.visa.
+    logai analyze fixtures/payment-service.log --app-package com.visa.
 """
 
 from __future__ import annotations
@@ -125,7 +125,7 @@ def _report(path: str, pipeline: Tier1Pipeline, data: ReportData, top: int) -> s
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="javalogai", description=__doc__)
+    parser = argparse.ArgumentParser(prog="logai", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     an = sub.add_parser("analyze", help="run the tier-1 pipeline over a log file")
@@ -161,7 +161,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="produce a reaction plan for every signal")
     an.add_argument("--llm", action="store_true",
                     help="use the model planner for signals no playbook matches "
-                         "(requires: pip install \"javalogai[llm]\")")
+                         "(requires: pip install \"logai[llm]\")")
     an.add_argument("--execute", action="store_true",
                     help="actually run plan actions (default is dry-run)")
     an.add_argument("--max-risk", default="notify",
@@ -273,7 +273,7 @@ def _loghub(args) -> int:
                   f"{'yes' if d.full_has_traces else 'no':<8}{d.layout}")
         print("\n  'traces' is for the FULL dataset; the 2k samples are single-line always.")
         print("  Hadoop full: 394k lines, 204k trace lines, 6,426 Caused-by chains.")
-        print("  Try: javalogai analyze --loghub-full hadoop --app-package org.apache.hadoop.\n")
+        print("  Try: logai analyze --loghub-full hadoop --app-package org.apache.hadoop.\n")
         return 0
     if not args.name:
         print("fetch needs a dataset name", file=sys.stderr)

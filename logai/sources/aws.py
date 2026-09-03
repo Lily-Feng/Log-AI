@@ -6,7 +6,7 @@ Both yield plain lines, so the tier-1 pipeline consumes them exactly like a file
 -- multiline assembly still happens here, on our side, because neither source
 preserves the notion of a logical event.
 
-boto3 is an optional dependency: `pip install "javalogai[aws]"`. It is imported
+boto3 is an optional dependency: `pip install "logai[aws]"`. It is imported
 lazily so the core package stays dependency-light.
 """
 
@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Any, Iterator
 
 _BOTO_HINT = (
-    "boto3 is required for AWS sources. Install it with: pip install \"javalogai[aws]\""
+    "boto3 is required for AWS sources. Install it with: pip install \"logai[aws]\""
 )
 
 

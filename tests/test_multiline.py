@@ -1,4 +1,4 @@
-from javalogai.ingest.multiline import MultilineAssembler
+from logai.ingest.multiline import MultilineAssembler
 
 TRACE = """2024-01-15 10:23:45.123 ERROR [main] com.lily.P - boom
 java.lang.NullPointerException: acct is null

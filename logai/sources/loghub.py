@@ -29,7 +29,7 @@ from typing import Iterator
 BASE_URL = "https://raw.githubusercontent.com/logpai/loghub/master"
 ZENODO_RECORD = "3227177"
 ZENODO_URL = f"https://zenodo.org/records/{ZENODO_RECORD}/files"
-DEFAULT_CACHE = Path.home() / ".cache" / "javalogai" / "loghub"
+DEFAULT_CACHE = Path.home() / ".cache" / "logai" / "loghub"
 
 
 @dataclass(frozen=True, slots=True)

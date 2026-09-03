@@ -8,7 +8,7 @@ has to have an answer that does not depend on re-running a model.
 
 Playbooks are ranked by specificity, so a rule naming an exception class beats a
 generic rule matching every novel fingerprint. Anything unmatched falls through
-to the LLM planner (see :mod:`javalogai.react.llm`), which is where novel
+to the LLM planner (see :mod:`logai.react.llm`), which is where novel
 failures get handled.
 """
 

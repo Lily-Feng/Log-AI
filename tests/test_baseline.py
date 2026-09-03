@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 
-from javalogai.baseline.counters import TimeBucketCounter
-from javalogai.baseline.detector import (
+from logai.baseline.counters import TimeBucketCounter
+from logai.baseline.detector import (
     NOVEL_TEMPLATE, RATE_BREACH, BaselineDetector, DetectorConfig,
 )
-from javalogai.schema import LogEvent, Severity
+from logai.schema import LogEvent, Severity
 
 T0 = datetime(2024, 1, 15, 10, 0, 0)
 

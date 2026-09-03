@@ -1,8 +1,14 @@
-# Log-AI — tier-1 log intelligence for JVM applications
+# logai — tiered log intelligence
 
-Deterministic log analysis for Java services: multiline stack-trace assembly, PCI
-scrubbing, template mining, exception fingerprinting and baseline breach
-detection. No model calls, no network, no tokens.
+Deterministic log analysis: multiline event assembly, PCI scrubbing, template
+mining, exception fingerprinting, baseline breach detection, and gated reaction
+plans. No model calls, no network, no tokens on the hot path.
+
+**Format-agnostic, JVM-strongest.** Scrubbing, template mining and baselining
+work on any timestamped log — validated at 100% parse on Hadoop, ZooKeeper,
+Spark, HDFS and OpenStack (Python). The JVM layer on top — stack-trace
+reassembly, `Caused by:` chains, throw-site fingerprinting — activates when
+there are traces to parse and no-ops cleanly when there are not.
 
 It is the bottom layer of a three-tier design. The point of the layer is to make
 the expensive tiers affordable by changing what their cost is proportional to.
@@ -21,17 +27,18 @@ signals** — a 99.6% reduction in what any model would need to read.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev]"     # note: `pip install logai` from PyPI is a
+                            # different, unrelated project (Salesforce's)
 
 python fixtures/generate.py
-javalogai analyze fixtures/payment-service.log --app-package com.lily.
+logai analyze fixtures/payment-service.log --app-package com.lily.
 
 # with reaction plans
-javalogai analyze fixtures/payment-service.log --app-package com.lily. --react
+logai analyze fixtures/payment-service.log --app-package com.lily. --react
 
 # against real production JVM logs (Hadoop, ZooKeeper, Spark, HDFS)
-javalogai loghub list
-javalogai analyze --loghub hadoop
+logai loghub list
+logai analyze --loghub hadoop
 ```
 
 ```
@@ -52,7 +59,7 @@ Distinct failures
 Use as a library:
 
 ```python
-from javalogai import Tier1Pipeline, PipelineConfig
+from logai import Tier1Pipeline, PipelineConfig
 
 pipeline = Tier1Pipeline(PipelineConfig(app_packages=("com.lily.",)))
 for event, signals in pipeline.stream(open("app.log")):
@@ -125,7 +132,7 @@ unrecognised risk level is treated as `destructive` rather than `observe` — it
 fails closed. A model may propose a rollback; only a person may authorise one.
 
 ```python
-from javalogai import ReactionEngine, ActionExecutor, ExecutorConfig, RiskLevel
+from logai import ReactionEngine, ActionExecutor, ExecutorConfig, RiskLevel
 
 executor = ActionExecutor(
     ExecutorConfig(dry_run=False, max_risk=RiskLevel.NOTIFY),
@@ -139,8 +146,8 @@ for plan in ReactionEngine().plan_all(signals):
 ## Data sources
 
 ```python
-from javalogai.sources import loghub
-from javalogai.sources.aws import S3LogSource, CloudWatchLogsSource
+from logai.sources import loghub
+from logai.sources.aws import S3LogSource, CloudWatchLogsSource
 
 pipeline.run(loghub.load("hadoop"))
 pipeline.run(S3LogSource(bucket="my-logs", prefix="payments/2024/01/15/"))
@@ -158,7 +165,7 @@ The published **2k samples contain no stack traces** — they are single-line
 only. The **full datasets on Zenodo** do. Hadoop is the one to reach for:
 
 ```bash
-javalogai analyze --loghub-full hadoop --app-package org.apache.hadoop.
+logai analyze --loghub-full hadoop --app-package org.apache.hadoop.
 ```
 
 2.6 MB compressed; 394k lines of which 204k are stack-trace continuations,
@@ -192,12 +199,12 @@ Failures     23 distinct fingerprint(s) across 6,233 events with a stack trace
 (formerly "Log Hub") leaves logs in — S3 objects and CloudWatch Logs streams.
 Both yield plain lines, so multiline assembly still happens on our side, because
 neither source preserves the notion of a logical event. Requires
-`pip install "javalogai[aws]"`; boto3 is imported lazily.
+`pip install "logai[aws]"`; boto3 is imported lazily.
 
 ### Scale: the full Spark dataset
 
 ```bash
-javalogai analyze --loghub-full spark --app-package org.apache.spark.
+logai analyze --loghub-full spark --app-package org.apache.spark.
 ```
 
 2.7 GB, 3,852 files, **33.2M lines** — 84x Hadoop, and a different failure mix
@@ -310,7 +317,7 @@ separates a real spike from noise. Each template is compared only against its
 own EWMA history, so a template firing 10,000/min and one firing twice an hour
 both get sensible thresholds with no hand-tuning.
 
-**Two masking layers stack, doing different jobs.** `javalogai.scrub` removes
+**Two masking layers stack, doing different jobs.** `logai.scrub` removes
 what must not be stored or transmitted. drain3's masking generalises what is
 merely *variable* — ids, durations, counts — so `took 12ms` and `took 4300ms`
 collapse to one template instead of two.
@@ -331,16 +338,16 @@ bills straight through to tier 3. Replaying known input against warm state
 yields no novelty signals at all:
 
 ```
-$ javalogai analyze app.log --state state/tpl.bin     # cold
+$ logai analyze app.log --state state/tpl.bin     # cold
   Signals      7 escalated to tier 2/3
-$ javalogai analyze app.log --state state/tpl.bin     # warm
+$ logai analyze app.log --state state/tpl.bin     # warm
   Signals      1 escalated to tier 2/3                # only the real spike
 ```
 
 ## Layout
 
 ```
-javalogai/
+logai/
   schema.py            LogEvent, ExceptionInfo, StackFrame (OpenTelemetry-shaped)
   ingest/
     multiline.py       physical lines -> logical events
@@ -349,14 +356,14 @@ javalogai/
   scrub/scrubber.py    PAN (Luhn), CVV, JWT, secrets, email, SSN, IBAN
   sources/
     loghub.py          real JVM logs from the loghub collection
-    aws.py             S3 and CloudWatch Logs (optional: javalogai[aws])
+    aws.py             S3 and CloudWatch Logs (optional: logai[aws])
   react/
     playbook.py        match conditions -> response, 9 built in
     engine.py          playbook match, else model planner, else fallback
     plan.py            ReactionPlan, Routing
     actions.py         Action, RiskLevel, ActionResult
     execute.py         dry-run / risk ceiling / approval / registered handlers
-    llm.py             Claude planner (optional: javalogai[llm])
+    llm.py             Claude planner (optional: logai[llm])
   template/
     miner.py           drain3 wrapper with persistence
     fingerprint.py     stable failure identity
@@ -382,5 +389,5 @@ javalogai/
 ## Tests
 
 ```bash
-python -m pytest -q       # 133 tests
+python -m pytest -q       # 164 tests
 ```

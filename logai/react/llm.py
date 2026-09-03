@@ -115,7 +115,7 @@ def parse_risk(value: str | None) -> RiskLevel:
 class AnthropicPlanner:
     """Plans unmatched signals with Claude.
 
-    Requires the optional dependency: `pip install "javalogai[llm]"`.
+    Requires the optional dependency: `pip install "logai[llm]"`.
     """
 
     model: str = DEFAULT_MODEL
@@ -131,7 +131,7 @@ class AnthropicPlanner:
         except ImportError as exc:  # pragma: no cover - depends on environment
             raise ImportError(
                 'anthropic is required for the LLM planner. '
-                'Install it with: pip install "javalogai[llm]"'
+                'Install it with: pip install "logai[llm]"'
             ) from exc
         self.client = anthropic.Anthropic()
         return self.client

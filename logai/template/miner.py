@@ -7,7 +7,7 @@ handler, so a long-running process keeps its learned templates across restarts.
 
 Two masking layers stack here and do different jobs:
 
-* :mod:`javalogai.scrub` removes values that must not be stored or transmitted.
+* :mod:`logai.scrub` removes values that must not be stored or transmitted.
 * drain3 masking (below) generalises values that are merely *variable* -- ids,
   durations, counts -- so that "took 12ms" and "took 4300ms" collapse to one
   template instead of two. Without it template counts drift upward forever.

@@ -1,6 +1,6 @@
 import pytest
 
-from javalogai.scrub.scrubber import Scrubber, card_network, is_probable_card, luhn_valid
+from logai.scrub.scrubber import Scrubber, card_network, is_probable_card, luhn_valid
 
 
 @pytest.mark.parametrize("pan", ["4111111111111111", "5500005555555559", "378282246310005"])
