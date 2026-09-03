@@ -1,4 +1,4 @@
-"""Generates docs/architecture.excalidraw -- the tier design and data flow.
+"""Generates docs/architecture.excalidraw -- the stages and data flow.
 
 Written as a generator rather than hand-authored JSON so the geometry stays
 consistent and the diagram can be regenerated when the design moves.
@@ -84,8 +84,8 @@ def arrow(x1, y1, x2, y2, color=INK, dashed=False, via=()):
 
 
 # ---------------------------------------------------------------- title
-text(60, 30, "logai — tier design and flow", size=30)
-text(60, 72, "Cost at each tier is proportional to a different denominator. "
+text(60, 30, "logai — stages and flow", size=30)
+text(60, 72, "Each stage costs in proportion to a different denominator. "
              "That is the whole design.", size=15, color="#5c5f66")
 
 # ---------------------------------------------------------------- sources
@@ -96,10 +96,10 @@ for i, (name, planned) in enumerate(srcs):
     box(60, 158 + i * 54, 190, 42, name, GRAY, size=14, dashed=planned)
 text(60, 386, "dashed = not built yet", size=12, color="#868e96")
 
-# ---------------------------------------------------------------- tier 1
+# ---------------------------------------------------------------- detect
 T1X, T1Y, T1W, T1H = 300, 120, 1080, 250
 box(T1X, T1Y, T1W, T1H, "", BLUE, radius=3)
-text(T1X + 20, T1Y + 16, "TIER 1 — deterministic", size=19, color="#1971c2")
+text(T1X + 20, T1Y + 16, "DETECT — deterministic", size=19, color="#1971c2")
 text(T1X + 20, T1Y + 44, "CPU only. No network, no model, no tokens.", size=13, color="#5c5f66")
 
 stages = ["Multiline\nassembly", "Header\nparse", "Scrub\n(PAN/PII)",
@@ -128,10 +128,10 @@ text(SX + 18, SY + 46, "novelty · rate breach\nseverity burst", size=12, color=
 arrow(T1X + T1W, 244, SX - 4, 244)
 text(SX + 6, SY + 104, "the only records\nthat travel further", size=12, color="#868e96")
 
-# ---------------------------------------------------------------- reaction tier
+# ---------------------------------------------------------------- react / explain
 RY = 470
 box(300, RY, 520, 150, "", GREEN)
-text(322, RY + 16, "TIER R — playbooks", size=19, color="#2f9e44")
+text(322, RY + 16, "REACT — playbooks", size=19, color="#2f9e44")
 text(322, RY + 44, "Pure predicate match. Free, reproducible,\n"
                    "explainable months later.", size=13, color="#5c5f66")
 box(322, RY + 92, 230, 42, "10 built-in playbooks", WHITE, size=13)
@@ -139,7 +139,7 @@ box(566, RY + 92, 232, 42, "ranked by specificity", WHITE, size=13)
 arrow(SX + 196, SY + 96, 560, RY - 6, via=[(1620, 412), (560, 412)])
 
 box(900, RY, 480, 150, "", VIOLET)
-text(922, RY + 16, "TIER 3 — model fallback", size=19, color="#6741d9")
+text(922, RY + 16, "EXPLAIN — model fallback", size=19, color="#6741d9")
 text(922, RY + 44, "Only signals no playbook matched.\nThis is the only place tokens are spent.",
      size=13, color="#5c5f66")
 box(922, RY + 92, 436, 42, "Claude · claude-opus-5", WHITE, size=13, family=3)
@@ -215,11 +215,11 @@ text(FX + 20, FY + 470, "peak RSS 33.5 MB — bounded by templates, not input si
      size=12, color="#5c5f66")
 
 text(60, CY, "Cost model", size=18)
-for i, (tier, denom, color) in enumerate([
-        ("Tier 1", "lines/day — billions.  CPU only, $0 in tokens.", "#1971c2"),
-        ("Tier R", "signals/day — dozens.  Deterministic, $0 in tokens.", "#2f9e44"),
-        ("Tier 3", "unmatched signals/day — a handful.  The only paid path.", "#6741d9")]):
-    text(60, CY + 34 + i * 26, f"{tier}   ∝  {denom}", size=14, color=color)
+for i, (stage, denom, color) in enumerate([
+        ("Detect ", "lines/day — billions.  CPU only, $0 in tokens.", "#1971c2"),
+        ("React  ", "signals/day — dozens.  Deterministic, $0 in tokens.", "#2f9e44"),
+        ("Explain", "unmatched signals/day — a handful.  The only paid path.", "#6741d9")]):
+    text(60, CY + 34 + i * 26, f"{stage}   ∝  {denom}", size=14, color=color)
 
 OUT.write_text(json.dumps({
     "type": "excalidraw", "version": 2, "source": "https://excalidraw.com",

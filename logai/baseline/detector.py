@@ -1,9 +1,9 @@
 """Decides which events are worth a model call.
 
 This is the gate that makes the economics work. Everything upstream is
-arithmetic over templates; everything downstream (embedding, LLM triage) is paid
-per call. A signal emitted here is the unit of work handed to the expensive
-tiers, so the volume of signals -- not the volume of logs -- sets the bill.
+arithmetic over templates; everything downstream is paid per call. A
+signal emitted here is the unit of work handed on, so the volume of signals --
+not the volume of logs -- sets the bill.
 
 Three detectors, cheapest first:
 
@@ -38,7 +38,7 @@ SEVERITY_BURST = "severity_burst"
 
 @dataclass(slots=True)
 class Signal:
-    """A candidate incident. The hand-off record to tier 2/3."""
+    """A candidate incident. The hand-off record to the react stage."""
 
     kind: str
     key: str
@@ -148,7 +148,7 @@ class BaselineDetector:
         # Novelty is whether the *miner* had ever seen this template, not whether
         # this process has. drain3 persists that across restarts; a set kept here
         # would not, and would re-announce every template as new after every
-        # deploy -- alert spam that bills straight through to tier 3.
+        # deploy -- alert spam that bills straight through to the model.
         if (
             self.config.report_novel_templates
             and event.template_id is not None

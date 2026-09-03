@@ -1,4 +1,4 @@
-# logai — tiered log intelligence
+# logai — staged log intelligence
 
 Deterministic log analysis: multiline event assembly, PCI scrubbing, template
 mining, exception fingerprinting, baseline breach detection, and gated reaction
@@ -10,22 +10,22 @@ Spark, HDFS and OpenStack (Python). The JVM layer on top — stack-trace
 reassembly, `Caused by:` chains, throw-site fingerprinting — activates when
 there are traces to parse and no-ops cleanly when there are not.
 
-It is the bottom layer of a three-tier design. The point of the layer is to make
-the expensive tiers affordable by changing what their cost is proportional to.
+Three stages, each costing in proportion to a different denominator. That
+difference is the design: the cheap stage absorbs the volume so the expensive
+one only ever sees what survived.
 
-| Tier | Cost scales with | Does | Status |
-| --- | --- | --- | --- |
-| **1. Deterministic** | lines/day — billions | Assemble → scrub → template → fingerprint → baseline. CPU only. | built |
-| **R. Reaction** | signals/day — dozens | Playbook match → ranked hypotheses, evidence, gated actions. Free when a playbook matches. | built |
-| **3. Model fallback** | *unmatched* signals/day — a handful | Claude plans the long tail no playbook covers. | built (opt-in) |
-| 2. Cheap model | *new templates*/day — thousands | Embed novel templates for dedup/clustering. | not built |
+| Stage | Cost scales with | Does |
+| --- | --- | --- |
+| **Detect** | lines/day — billions | Assemble → scrub → template → fingerprint → baseline. CPU only, no tokens. |
+| **React** | signals/day — dozens | Playbook match → ranked hypotheses, evidence, gated actions. Deterministic, no tokens. |
+| **Explain** | *unmatched* signals/day — a handful | Claude plans the long tail no playbook covers. The only paid path. |
 
 On the bundled fixture, 1,837 raw lines reduce to **5 templates** and **7
 signals** — a 99.6% reduction in what any model would need to read.
 
 ## Architecture
 
-![tier design and flow](docs/architecture.png)
+![stages and flow](docs/architecture.png)
 
 The editable source is [`docs/architecture.excalidraw`](docs/architecture.excalidraw)
 — open it at [excalidraw.com](https://excalidraw.com) via File → Open. It is
@@ -52,13 +52,13 @@ logai analyze --loghub hadoop
 ```
 
 ```
-Tier-1 report  fixtures/payment-service.log
+logai report  fixtures/payment-service.log
 ========================================================================
   Input        1,837 raw lines -> 1,810 logical events (100.0% parsed)
   Templates    5  (367 raw lines per template)
   Failures     1 distinct fingerprint(s) across 3 events with a stack trace
   Redaction    1 events redacted  [cvv=1 email=1 pan=1]
-  Signals      7 escalated to tier 2/3
+  Signals      7 escalated to react/explain
 
 Distinct failures
   faf083413eb888fc  x3  NullPointerException -> SQLTransientConnectionException
@@ -69,18 +69,18 @@ Distinct failures
 Use as a library:
 
 ```python
-from logai import Tier1Pipeline, PipelineConfig
+from logai import Pipeline, PipelineConfig
 
-pipeline = Tier1Pipeline(PipelineConfig(app_packages=("com.lily.",)))
+pipeline = Pipeline(PipelineConfig(app_packages=("com.lily.",)))
 for event, signals in pipeline.stream(open("app.log")):
     for signal in signals:
-        handoff_to_tier3(signal)      # only these cost money
+        handoff(signal)      # only these cost money
 ```
 
 `stream()` holds one event at a time; memory is bounded by the longest stack
 trace, not by input size.
 
-## The reaction tier
+## React: turning signals into plans
 
 A signal says something changed. A plan says what to do about it. `--react`
 turns every signal into a :class:`ReactionPlan`: ranked hypotheses, the evidence
@@ -344,14 +344,14 @@ mined templates (`PATH`) alongside fingerprints and EWMA baselines
 (`PATH.detector.json`). Novelty is defined as whether the *miner* ever saw a
 template, not whether the current process did — a process-local set would
 re-announce every template as new after every deploy, which is alert spam that
-bills straight through to tier 3. Replaying known input against warm state
+bills straight through to the model. Replaying known input against warm state
 yields no novelty signals at all:
 
 ```
 $ logai analyze app.log --state state/tpl.bin     # cold
-  Signals      7 escalated to tier 2/3
+  Signals      7 escalated to react/explain
 $ logai analyze app.log --state state/tpl.bin     # warm
-  Signals      1 escalated to tier 2/3                # only the real spike
+  Signals      1 escalated to react/explain                # only the real spike
 ```
 
 ## Layout
@@ -384,11 +384,12 @@ logai/
   cli.py
 ```
 
-`Signal` is the seam. Tier 2 and tier 3 consume signals and never touch raw logs.
+`Signal` is the seam. React and explain consume signals and never touch raw logs.
 
 ## Not yet built
 
-- Tier 2 (embedding-based dedup and clustering of novel templates).
+- Embedding-based dedup and clustering of novel templates, to cut how many
+  reach the react stage on a cold start.
 - Kafka and OTel-collector sources; Kinesis.
 - GC and thread-dump parsing; correlation against deploys and traces — several
   playbooks recommend "correlate against recent deploys" but nothing wires that

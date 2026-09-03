@@ -1,6 +1,7 @@
 """Stable identity for a failure.
 
-The question tier 3 has to answer is "is this the same bug as last Tuesday?".
+The question the explain stage has to answer is "is this the same bug as last
+Tuesday?".
 Grouping by exception class is far too coarse -- half a large codebase throws
 `NullPointerException`. Grouping by the full stack trace is far too fine: the
 same defect reached through a REST controller, a Kafka consumer and a scheduled

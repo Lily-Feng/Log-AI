@@ -9,7 +9,7 @@ FIXTURE = str(Path(__file__).parent.parent / "fixtures" / "payment-service.log")
 def test_report_runs(capsys):
     assert main(["analyze", FIXTURE, "--app-package", "com.lily."]) == 0
     out = capsys.readouterr().out
-    assert "Tier-1 report" in out
+    assert "logai report" in out
     assert "distinct call paths merged" in out
 
 

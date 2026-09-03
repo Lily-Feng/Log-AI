@@ -1,4 +1,4 @@
-"""logai -- tiered log intelligence.
+"""logai -- staged log intelligence.
 
 Format-agnostic through template mining and baselining; strongest on JVM
 logs, where stack traces are reassembled into single events and failures are
@@ -7,7 +7,7 @@ the rest of the pipeline unchanged.
 """
 
 from .baseline.detector import BaselineDetector, DetectorConfig, Signal
-from .pipeline import PipelineConfig, PipelineStats, Tier1Pipeline
+from .pipeline import Pipeline, PipelineConfig, PipelineStats
 from .react.actions import Action, ActionResult, RiskLevel
 from .react.engine import EngineConfig, Planner, ReactionEngine
 from .react.execute import ActionExecutor, ExecutorConfig
@@ -17,11 +17,11 @@ from .schema import ExceptionInfo, LogEvent, Severity, StackFrame
 
 __version__ = "0.2.0"
 __all__ = [
-    # tier 1
-    "Tier1Pipeline", "PipelineConfig", "PipelineStats",
+    # detect
+    "Pipeline", "PipelineConfig", "PipelineStats",
     "BaselineDetector", "DetectorConfig", "Signal",
     "LogEvent", "ExceptionInfo", "StackFrame", "Severity",
-    # reaction tier
+    # react / explain
     "ReactionEngine", "EngineConfig", "Planner", "ReactionPlan", "Routing",
     "Playbook", "Match", "BUILTIN_PLAYBOOKS",
     "Action", "ActionResult", "RiskLevel", "ActionExecutor", "ExecutorConfig",

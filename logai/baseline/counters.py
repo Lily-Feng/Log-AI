@@ -1,7 +1,7 @@
 """Time-bucketed counting over a rolling window.
 
 Counts are kept per (service, template) rather than per raw line, which is the
-whole economic point of tier 1: the number of distinct keys tracks the number of
+whole economic point of the detect stage: the number of distinct keys tracks the
 *templates* a system emits (hundreds to low thousands) rather than the number of
 lines it emits (billions). Memory is bounded by keys x window, not by volume.
 """

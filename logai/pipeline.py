@@ -1,4 +1,4 @@
-"""Tier 1: the deterministic path. No model calls, no network, no tokens.
+"""Detect: the deterministic path. No model calls, no network, no tokens.
 
     raw lines
       -> MultilineAssembler   one logical event per stack trace
@@ -8,10 +8,10 @@
       -> fingerprint_exception  stable identity for the failure
       -> TemplateMiner        drain3 template id
       -> BaselineDetector     novelty / rate breach / severity burst
-      -> Signal               the hand-off record to tier 2 and 3
+      -> Signal               the hand-off record to react and explain
 
 Cost here is CPU-per-line and nothing else, which is what lets it run over the
-full firehose. Only :class:`Signal` objects continue to the paid tiers, so spend
+full firehose. Only :class:`Signal` objects travel further, so spend downstream
 scales with incidents rather than with volume.
 """
 
@@ -64,11 +64,11 @@ class PipelineStats:
 
     @property
     def compression(self) -> float:
-        """Raw lines per distinct template -- the tier-1 economics in one number."""
+        """Raw lines per distinct template -- the economics in one number."""
         return self.raw_lines / self.templates if self.templates else 0.0
 
 
-class Tier1Pipeline:
+class Pipeline:
     def __init__(self, config: PipelineConfig | None = None) -> None:
         self.config = config or PipelineConfig()
         self.assembler = MultilineAssembler(self.config.header_pattern)

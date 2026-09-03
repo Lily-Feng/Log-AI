@@ -135,8 +135,8 @@ def test_widening_the_header_pattern_did_not_swallow_continuations(line):
 
 
 def test_non_jvm_logs_use_the_pipeline_without_the_exception_layer():
-    from logai import PipelineConfig, Tier1Pipeline
-    pipeline = Tier1Pipeline(PipelineConfig(default_service="openstack"))
+    from logai import PipelineConfig, Pipeline
+    pipeline = Pipeline(PipelineConfig(default_service="openstack"))
     events = list(pipeline.events(loghub.load("openstack")))
     assert pipeline.stats.parsed_events == pipeline.stats.events   # 100% parsed
     assert pipeline.stats.events_with_exception == 0               # no JVM traces

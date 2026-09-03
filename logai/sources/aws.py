@@ -2,7 +2,7 @@
 
 Covers the two shapes that AWS Centralized Logging with OpenSearch (formerly
 "Log Hub") actually leaves logs in: objects on S3, and CloudWatch Logs streams.
-Both yield plain lines, so the tier-1 pipeline consumes them exactly like a file
+Both yield plain lines, so the detect pipeline consumes them exactly like a file
 -- multiline assembly still happens here, on our side, because neither source
 preserves the notion of a logical event.
 

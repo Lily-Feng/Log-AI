@@ -48,7 +48,7 @@ Input        1,837 raw lines -> 1,810 logical events (100.0% parsed)
 Templates    5  (367 raw lines per template)
 Failures     1 distinct fingerprint(s) across 3 events with a stack trace
 Redaction    1 events redacted  [cvv=1 email=1 pan=1]
-Signals      7 escalated to tier 2/3
+Signals      7 escalated to react/explain
 ```
 
 Three stack traces reached through three different entry paths collapse to one
@@ -166,7 +166,7 @@ previous event — silently, with no parse error. All four now parse at 100%.
 → `test_sources.py::test_zookeeper_logger_is_unpacked_from_the_thread_bracket`
 → `test_sources.py::test_loghub_layouts_are_recognised_as_event_headers`
 
-### 5. Reaction tier had no generic rate-breach playbook
+### 5. The react stage had no generic rate-breach playbook
 
 **Found on:** full Spark — **83 of 183 signals matched nothing**, all rate breaches.
 
@@ -225,7 +225,7 @@ a multiple of baseline (default 2.0×) as well as a z-score.
 
 drain3 persists its templates, but the detector kept a *separate* in-memory
 `seen_templates` set — so every restart re-announced all templates as new. In
-production that is an alert burst after every deploy, billing through to tier 3.
+production that is an alert burst after every deploy, billing through to the model.
 Novelty now derives from the miner's persisted state.
 
 Verified on real data: full Hadoop cold run 99 signals → warm run 5.
@@ -309,7 +309,7 @@ Stated plainly, because "tested" and "tested against this" are different claims.
   constructor defaults are covered; `boto3` is not installed in CI.
 - **Gated execution has never run a real handler against a real system.** Every
   gate is unit-tested; no production side effect has been performed.
-- **The reaction tier has not been run against the Hadoop corpus** — those
+- **The react stage has not been run against the Hadoop corpus** — those
   playbooks are payments- and JVM-service-shaped, and Hadoop's failures are
   infrastructure. Spark exercised it (finding 5).
 - **No deploy correlation exists.** Several playbooks recommend "correlate

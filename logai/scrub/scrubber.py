@@ -1,6 +1,6 @@
 """Redacts sensitive values before anything leaves the host.
 
-Placement matters as much as the rules: this runs in tier 1, on the box, ahead
+Placement matters as much as the rules: this runs in detect, on the box, ahead
 of template mining and long before any model call. Everything downstream sees
 redacted text only, so the "does data cross a boundary" review covers masked
 templates rather than raw payment logs.

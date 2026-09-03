@@ -5,7 +5,7 @@ number of systems. Four of them are JVM applications, which makes them the best
 freely available check that header parsing survives contact with formats nobody
 designed for us.
 
-Two tiers of data, and the difference matters:
+Two levels of data, and the difference matters:
 
 * The **2k samples** in the GitHub repo are single-line only -- they contain no
   stack traces at all. Good for header parsing and template mining, useless for

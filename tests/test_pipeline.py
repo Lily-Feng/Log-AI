@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from logai import PipelineConfig, Tier1Pipeline
+from logai import PipelineConfig, Pipeline
 from logai.baseline.detector import NOVEL_FINGERPRINT, NOVEL_TEMPLATE, RATE_BREACH
 from logai.schema import Severity
 
@@ -8,7 +8,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "payment-service.log"
 
 
 def build():
-    return Tier1Pipeline(PipelineConfig(app_packages=("com.lily.",), default_service="lily-payments"))
+    return Pipeline(PipelineConfig(app_packages=("com.lily.",), default_service="lily-payments"))
 
 
 def analyse():

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from .baseline.detector import DetectorConfig
-from .pipeline import PipelineConfig, Tier1Pipeline
+from .pipeline import Pipeline, PipelineConfig
 from .react.actions import RiskLevel
 from .react.engine import ReactionEngine
 from .react.execute import ActionExecutor, ExecutorConfig
@@ -70,12 +70,12 @@ class ReportData:
         self.signals.extend(signals)
 
 
-def _report(path: str, pipeline: Tier1Pipeline, data: ReportData, top: int) -> str:
+def _report(path: str, pipeline: Pipeline, data: ReportData, top: int) -> str:
     s = pipeline.stats
     out: list[str] = []
     w = out.append
 
-    w(f"\n\033[1mTier-1 report\033[0m  {path}")
+    w(f"\n\033[1mlogai report\033[0m  {path}")
     w("=" * 72)
 
     parsed_pct = 100 * s.parsed_events / s.events if s.events else 0
@@ -87,7 +87,7 @@ def _report(path: str, pipeline: Tier1Pipeline, data: ReportData, top: int) -> s
     hits = dict(pipeline.scrubber.totals)
     hit_str = " ".join(f"{k}={v}" for k, v in sorted(hits.items())) or "none"
     w(f"  Redaction    {_fmt(s.redacted_events)} events redacted  [{hit_str}]")
-    w(f"  Signals      {len(data.signals)} escalated to tier 2/3")
+    w(f"  Signals      {len(data.signals)} escalated to react/explain")
 
     template_counts = data.template_counts
     templates = pipeline.miner.templates()
@@ -128,7 +128,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="logai", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    an = sub.add_parser("analyze", help="run the tier-1 pipeline over a log file")
+    an = sub.add_parser("analyze", help="run the detect pipeline over a log file")
     an.add_argument("path", nargs="?", default=None,
                     help="log file, or - for stdin (omit when using --loghub)")
     an.add_argument("--loghub-full", metavar="NAME",
@@ -196,7 +196,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             min_ratio=args.min_ratio,
         ),
     )
-    pipeline = Tier1Pipeline(config)
+    pipeline = Pipeline(config)
     if args.loghub_full:
         label, lines = f"loghub-full:{args.loghub_full}", loghub.load_full(args.loghub_full)
     elif args.loghub:

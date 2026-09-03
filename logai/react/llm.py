@@ -1,6 +1,6 @@
 """Model-backed planner for signals no playbook covers.
 
-This is tier 3, and it is deliberately the last resort. Playbooks handle known
+This is the explain stage, and it is deliberately the last resort. Playbooks handle known
 failure modes for free and reproducibly; the model exists for the long tail,
 where writing a rule in advance was not possible. Cost therefore scales with
 *unmatched* signals, which in a healthy system is a small number per day.
