@@ -1,0 +1,58 @@
+from javalogai.ingest.exceptions import parse_exception_chain
+from javalogai.template.fingerprint import DEFAULT_TOP_N, describe_fingerprint, fingerprint_exception
+
+APP = ("com.visa.",)
+HEAD = ["java.lang.NullPointerException: acct is null",
+        "\tat com.visa.payments.PaymentService.authorize(PaymentService.java:142)"]
+PATHS = {
+    "rest": "\tat com.visa.payments.api.PaymentController.submit(PaymentController.java:57)",
+    "kafka": "\tat com.visa.payments.stream.SettlementConsumer.onMessage(SettlementConsumer.java:31)",
+    "batch": "\tat com.visa.payments.batch.NightlyReconJob.run(NightlyReconJob.java:214)",
+}
+
+
+def fp(lines, **kw):
+    return fingerprint_exception(parse_exception_chain(lines, app_packages=APP), **kw)
+
+
+def test_same_defect_via_different_entry_paths_shares_a_fingerprint():
+    prints = {fp(HEAD + [frame]) for frame in PATHS.values()}
+    assert len(prints) == 1
+
+
+def test_default_grouping_is_throw_site_not_call_path():
+    assert DEFAULT_TOP_N == 1
+
+
+def test_path_sensitive_grouping_available_when_wanted():
+    prints = {fp(HEAD + [frame], top_n=5) for frame in PATHS.values()}
+    assert len(prints) == 3
+
+
+def test_different_defects_do_not_collide():
+    other = ["java.lang.NullPointerException: cfg is null", "\tat com.visa.billing.Invoice.render(Invoice.java:20)"]
+    assert fp(HEAD + [PATHS["rest"]]) != fp(other)
+
+
+def test_different_root_cause_changes_the_fingerprint():
+    a = HEAD + ["Caused by: java.sql.SQLException: timeout", "\tat com.visa.db.R.q(R.java:3)"]
+    b = HEAD + ["Caused by: java.io.IOException: refused", "\tat com.visa.db.R.q(R.java:3)"]
+    assert fp(a) != fp(b)
+
+
+def test_line_numbers_excluded_by_default_survive_refactoring():
+    moved = ["java.lang.NullPointerException: acct is null",
+             "\tat com.visa.payments.PaymentService.authorize(PaymentService.java:988)"]
+    assert fp(HEAD) == fp(moved)
+    assert fp(HEAD, include_lines=True) != fp(moved, include_lines=True)
+
+
+def test_framework_only_trace_falls_back_to_all_frames():
+    fw = ["java.lang.IllegalStateException: x", "\tat org.springframework.web.X.y(X.java:9)"]
+    chain = parse_exception_chain(fw, app_packages=APP)
+    assert fingerprint_exception(chain) is not None
+    assert "no application frames" in describe_fingerprint(chain)
+
+
+def test_empty_chain_has_no_fingerprint():
+    assert fingerprint_exception([]) is None
