@@ -260,3 +260,24 @@ def test_plan_serialises():
     d = ReactionEngine().plan(signal(SEVERITY_BURST)).to_dict()
     assert d["playbook_id"] == "error-burst"
     assert isinstance(d["actions"], list) and d["actions"][0]["risk"]
+
+
+def test_generic_rate_breach_has_a_catch_all():
+    # Found by running the Spark corpus: 83 of 183 signals were rate breaches
+    # that matched nothing, because the only rate-breach playbook was the
+    # payments-specific decline spike. Any non-payments service hit the
+    # unclassified fallback for its most common signal kind.
+    plan = ReactionEngine().plan(signal(
+        RATE_BREACH, template="Executor heartbeat timed out after <DURATION>",
+        observed=120, expected=4,
+    ))
+    assert plan.playbook_id == "rate-breach"
+    assert plan.generated_by == PLAYBOOK
+    assert plan.max_risk <= RiskLevel.NOTIFY
+
+
+def test_payments_decline_spike_still_beats_the_generic_rate_breach():
+    plan = ReactionEngine().plan(signal(
+        RATE_BREACH, template="Payment declined by issuer code=<NUM>", observed=200, expected=5,
+    ))
+    assert plan.playbook_id == "issuer-decline-spike"

@@ -94,3 +94,50 @@ def test_multiline_exception_message_is_joined():
         app_packages=("com.lily.",),
     )
     assert chain[0].message == "line one\nline two continues"
+
+
+# -- Scala / Spark frame shapes, from the full Spark dataset ------------------
+
+def test_scala_name_mangled_method_parses():
+    # Scala encodes a private method's owning path into the name with $ symbols.
+    f = parse_frame(
+        "\tat org.apache.spark.rpc.RpcTimeout.org$apache$spark$rpc$RpcTimeout$$"
+        "createRpcTimeoutException(RpcTimeout.scala:48)",
+        lambda c: True,
+    )
+    assert f.declaring_class == "org.apache.spark.rpc.RpcTimeout"
+    assert f.method == "org$apache$spark$rpc$RpcTimeout$$createRpcTimeoutException"
+    assert f.file == "RpcTimeout.scala" and f.line == 48
+
+
+def test_scala_anonymous_function_frame_parses():
+    f = parse_frame(
+        "\tat org.apache.spark.rpc.RpcTimeout$$anonfun$addMessageIfTimeout$1"
+        ".applyOrElse(RpcTimeout.scala:63)",
+        lambda c: True,
+    )
+    assert f.declaring_class == "org.apache.spark.rpc.RpcTimeout$$anonfun$addMessageIfTimeout$1"
+    assert f.method == "applyOrElse"
+
+
+def test_scala_stdlib_is_framework():
+    assert is_application_frame("scala.concurrent.Future") is False
+    assert is_application_frame("scala.util.Failure") is False
+
+
+def test_scala_chain_root_cause_and_app_frames():
+    trace = [
+        "org.apache.spark.SparkException: Exception thrown in awaitResult",
+        "\tat org.apache.spark.rpc.RpcTimeout.awaitResult(RpcTimeout.scala:77)",
+        "Caused by: org.apache.spark.rpc.RpcTimeoutException: Cannot receive any reply in 120 seconds",
+        "\tat org.apache.spark.rpc.RpcTimeout.org$apache$spark$rpc$RpcTimeout$$"
+        "createRpcTimeoutException(RpcTimeout.scala:48)",
+        "\tat scala.runtime.AbstractPartialFunction.apply(AbstractPartialFunction.scala:33)",
+        "\tat scala.util.Try$.apply(Try.scala:161)",
+    ]
+    chain = parse_exception_chain(trace, app_packages=("org.apache.spark.",))
+    assert [e.exception_class for e in chain] == [
+        "org.apache.spark.SparkException", "org.apache.spark.rpc.RpcTimeoutException",
+    ]
+    app = [f.declaring_class for e in chain for f in e.frames if f.is_application]
+    assert app == ["org.apache.spark.rpc.RpcTimeout", "org.apache.spark.rpc.RpcTimeout"]

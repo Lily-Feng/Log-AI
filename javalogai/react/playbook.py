@@ -275,6 +275,34 @@ BUILTIN_PLAYBOOKS: list[Playbook] = [
         confidence=0.65,
     ),
     Playbook(
+        id="rate-breach",
+        title="Log rate departed from its baseline",
+        match=Match(signal_kinds=(RATE_BREACH,)),
+        hypotheses=[
+            "A deploy or config change altered how often this path executes.",
+            "Load shifted: more traffic, a retry storm, or an upstream fanning out.",
+            "A dormant code path started running -- check whether the baseline was ~0.",
+            "The template is naturally bursty and the baseline window is too short.",
+        ],
+        actions=[
+            _a("plot-history", "observe", "Plot this template's rate over the last 24h "
+               "and compare against the same window on previous days", RiskLevel.OBSERVE),
+            _a("group-by-attribute", "observe", "Break the breach down by host, instance and "
+               "thread to see whether it is one source or all of them", RiskLevel.OBSERVE),
+            _a("recent-changes", "observe", "List deploys and config changes to this service "
+               "in the window before the breach", RiskLevel.OBSERVE),
+            _a("check-severity", "observe", "Check whether error-level templates moved too, "
+               "or only this one", RiskLevel.OBSERVE),
+            _a("notify-owner", "notify", "Notify the service owner if the breach persists "
+               "beyond two windows", RiskLevel.NOTIFY),
+        ],
+        routing=Routing(team="service-owner", channel="#alerts", page=False, ticket_priority="P3"),
+        blast_radius="Unknown without knowing what the template represents.",
+        # Deliberately low: a rate breach on its own says something changed, not
+        # that something broke. It is a prompt to look, not a diagnosis.
+        confidence=0.35,
+    ),
+    Playbook(
         id="novel-failure",
         title="Previously unseen failure",
         match=Match(signal_kinds=(NOVEL_FINGERPRINT,)),

@@ -56,3 +56,23 @@ def test_framework_only_trace_falls_back_to_all_frames():
 
 def test_empty_chain_has_no_fingerprint():
     assert fingerprint_exception([]) is None
+
+
+def test_top_n_1_ignores_unstable_scala_lambda_frames():
+    # Scala numbers anonymous functions ($$anonfun$...$1) at compile time, so
+    # those names can shift between builds. Frame 0 is the throw site and is a
+    # real named method; measured on the full Spark dataset, no throw site in
+    # the sample was compiler-generated. top_n=1 therefore stays stable across a
+    # recompile that renumbers the lambdas deeper in the stack.
+    head = ["org.apache.spark.rpc.RpcTimeoutException: Cannot receive any reply",
+            "\tat org.apache.spark.rpc.RpcTimeout.createRpcTimeoutException(RpcTimeout.scala:48)"]
+    build_a = head + ["\tat org.apache.spark.rpc.RpcTimeout$$anonfun$1.applyOrElse(RpcTimeout.scala:63)"]
+    build_b = head + ["\tat org.apache.spark.rpc.RpcTimeout$$anonfun$7.applyOrElse(RpcTimeout.scala:63)"]
+
+    def fp_spark(lines, **kw):
+        return fingerprint_exception(
+            parse_exception_chain(lines, app_packages=("org.apache.spark.",)), **kw
+        )
+
+    assert fp_spark(build_a) == fp_spark(build_b)
+    assert fp_spark(build_a, top_n=5) != fp_spark(build_b, top_n=5)
