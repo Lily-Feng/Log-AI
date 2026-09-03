@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -35,7 +35,42 @@ def _fmt(n: float) -> str:
     return f"{n:,.0f}" if n >= 1000 else f"{n:g}"
 
 
-def _report(path: str, pipeline: Tier1Pipeline, events: list[LogEvent], signals: list, top: int) -> str:
+#: Cap on distinct call paths retained per fingerprint. The report only needs
+#: the count, and an unbounded set would grow with corpus size.
+MAX_PATHS_PER_FINGERPRINT = 64
+
+
+class ReportData:
+    """Accumulates report state while streaming.
+
+    Holds only per-template and per-fingerprint aggregates plus one sample event
+    each, so memory is bounded by the number of distinct templates and failures
+    rather than by the number of events. A multi-GB corpus reduces to a few
+    hundred templates and a few dozen failures, which is the whole premise.
+    """
+
+    def __init__(self) -> None:
+        self.template_counts: Counter[int] = Counter()
+        self.fingerprints: dict[str, dict] = {}
+        self.signals: list = []
+
+    def add(self, event: LogEvent, signals: list) -> None:
+        if event.template_id is not None:
+            self.template_counts[event.template_id] += 1
+        if event.fingerprint:
+            group = self.fingerprints.get(event.fingerprint)
+            if group is None:
+                group = {"count": 0, "first": event, "paths": set()}
+                self.fingerprints[event.fingerprint] = group
+            group["count"] += 1
+            if len(group["paths"]) < MAX_PATHS_PER_FINGERPRINT:
+                group["paths"].add(
+                    tuple(f.signature() for f in event.iter_frames() if f.is_application)
+                )
+        self.signals.extend(signals)
+
+
+def _report(path: str, pipeline: Tier1Pipeline, data: ReportData, top: int) -> str:
     s = pipeline.stats
     out: list[str] = []
     w = out.append
@@ -52,39 +87,38 @@ def _report(path: str, pipeline: Tier1Pipeline, events: list[LogEvent], signals:
     hits = dict(pipeline.scrubber.totals)
     hit_str = " ".join(f"{k}={v}" for k, v in sorted(hits.items())) or "none"
     w(f"  Redaction    {_fmt(s.redacted_events)} events redacted  [{hit_str}]")
-    w(f"  Signals      {len(signals)} escalated to tier 2/3")
+    w(f"  Signals      {len(data.signals)} escalated to tier 2/3")
 
-    template_counts = Counter(e.template_id for e in events if e.template_id is not None)
+    template_counts = data.template_counts
     templates = pipeline.miner.templates()
     w(f"\n\033[1mTop templates by volume\033[0m")
     for tid, count in template_counts.most_common(top):
         share = 100 * count / s.events if s.events else 0
         w(f"  {count:>7,}  {share:5.1f}%  [{tid}] {templates.get(tid, '')[:90]}")
 
-    groups: dict[str, list[LogEvent]] = defaultdict(list)
-    for e in events:
-        if e.fingerprint:
-            groups[e.fingerprint].append(e)
-    if groups:
+    if data.fingerprints:
         w(f"\n\033[1mDistinct failures\033[0m")
-        for fp, evs in sorted(groups.items(), key=lambda kv: -len(kv[1])):
-            first = evs[0]
+        ranked = sorted(data.fingerprints.items(), key=lambda kv: -kv[1]["count"])
+        for fp, group in ranked[:top]:
+            first = group["first"]
             chain = " -> ".join(c.rsplit(".", 1)[-1] for c in first.exception_chain)
-            w(f"  {fp}  x{len(evs)}  {chain}")
+            w(f"  {fp}  x{group['count']}  {chain}")
             w(f"      {describe_fingerprint(first.exceptions)}")
-            paths = {
-                tuple(f.signature() for f in e.iter_frames() if f.is_application) for e in evs
-            }
-            if len(paths) > 1:
-                w(f"      \033[2m{len(paths)} distinct call paths merged into this one failure\033[0m")
+            n_paths = len(group["paths"])
+            if n_paths > 1:
+                more = "+" if n_paths >= MAX_PATHS_PER_FINGERPRINT else ""
+                w(f"      \033[2m{n_paths}{more} distinct call paths merged "
+                  f"into this one failure\033[0m")
+        if len(ranked) > top:
+            w(f"  \033[2m... {len(ranked) - top} more\033[0m")
 
-    if signals:
+    if data.signals:
         w(f"\n\033[1mSignals\033[0m  \033[2m(the only records that would reach a model)\033[0m")
-        for sig in signals[:top]:
+        for sig in data.signals[:top]:
             w(f"  [{sig.kind:<18}] {sig.key}")
             w(f"      {sig.detail}")
-        if len(signals) > top:
-            w(f"  \033[2m... {len(signals) - top} more\033[0m")
+        if len(data.signals) > top:
+            w(f"  \033[2m... {len(data.signals) - top} more\033[0m")
 
     w("")
     return "\n".join(out)
@@ -170,7 +204,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(event.to_dict(), default=str))
         return 0
 
-    events, signals = pipeline.run(lines)
+    # Stream rather than materialise: a large corpus has more events than fit in
+    # memory, and the report only ever needed aggregates.
+    data = ReportData()
+    for event, sigs in pipeline.stream(lines):
+        data.add(event, sigs)
+    trailing = list(pipeline.detector.flush())
+    pipeline.stats.signals += len(trailing)
+    data.signals.extend(trailing)
+    signals = data.signals
     if args.state:
         pipeline.detector.save_state(f"{args.state}.detector.json")
 
@@ -182,7 +224,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(payload, indent=2))
         return 0
 
-    print(_report(label, pipeline, events, signals, args.top))
+    print(_report(label, pipeline, data, args.top))
     for plan in plans:
         print(plan.render())
     if plans:

@@ -20,6 +20,7 @@ Two tiers of data, and the difference matters:
 
 from __future__ import annotations
 
+import shutil
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -117,8 +118,15 @@ def fetch_full(name: str, cache_dir: Path | str = DEFAULT_CACHE, force: bool = F
 
     archive = cache / f"{dataset.name}.tar.gz"
     if not archive.exists() or force:
+        # Copy in chunks rather than response.read(): these archives run to 2 GB
+        # (Thunderbird), and buffering one wholly in memory to write it straight
+        # back out is avoidable. Download to a temp name so an interrupted
+        # transfer cannot be mistaken for a complete cached archive.
+        partial = archive.with_suffix(".part")
         with urllib.request.urlopen(dataset.full_url, timeout=600) as response:
-            archive.write_bytes(response.read())
+            with open(partial, "wb") as fh:
+                shutil.copyfileobj(response, fh, length=1 << 20)
+        partial.replace(archive)
 
     # Extract into a per-dataset directory. These archives disagree about their
     # internal layout -- Hadoop unpacks a pile of application_* directories with
